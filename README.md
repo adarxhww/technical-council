@@ -1,4 +1,4 @@
-# Technical Council — iOS / Glassmorphism redesign
+# Technical Council — Glassmorphism design
 
 This is a fresh Next.js implementation based on the approved light iOS-inspired/glassmorphism visual direction.
 
