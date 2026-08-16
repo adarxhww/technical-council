@@ -111,8 +111,7 @@ export default function Home() {
             </div>
 
 
-            <h1 className="max-w-3xl text-5xl font-bold leading-[0.98] tracking-[-0.045em] sm:text-6xl lg:text-7xl">
-
+            <h1 className="max-w-3xl text-4xl font-bold leading-[0.98] tracking-[-0.045em] sm:text-6xl lg:text-7xl">
               Where
 
               <span className="block bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-500 bg-clip-text pb-3 text-transparent">
@@ -120,7 +119,6 @@ export default function Home() {
               </span>
 
               meets innovation.
-
             </h1>
 
 
@@ -160,27 +158,66 @@ export default function Home() {
 
 
             {/* MINI STATS */}
-            <div className="mt-8 flex flex-wrap gap-3">
+            {/* MINI STATS */}
+            <div className="mt-8 flex flex-nowrap gap-3">
 
-              <div className="rounded-2xl border border-white bg-white/65 px-4 py-3 shadow-sm backdrop-blur-xl">
-                <span className="text-lg font-bold">30+</span>
-                <span className="ml-2 text-xs text-slate-500">
-                  Members
-                </span>
+              {/* MEMBERS */}
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-white bg-white/65 px-3 py-3 shadow-sm backdrop-blur-xl sm:flex-none sm:px-4">
+
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                  <Users size={15} />
+                </div>
+
+                <div className="min-w-0">
+                  <span className="block text-base font-bold leading-none sm:text-lg">
+                    30+
+                  </span>
+
+                  <span className="mt-1 block truncate text-[10px] text-slate-500 sm:text-xs">
+                    Members
+                  </span>
+                </div>
+
               </div>
 
-              <div className="rounded-2xl border border-white bg-white/65 px-4 py-3 shadow-sm backdrop-blur-xl">
-                <span className="text-lg font-bold">5+</span>
-                <span className="ml-2 text-xs text-slate-500">
-                  Events
-                </span>
+
+              {/* EVENTS */}
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-white bg-white/65 px-3 py-3 shadow-sm backdrop-blur-xl sm:flex-none sm:px-4">
+
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+                  <CalendarDays size={15} />
+                </div>
+
+                <div className="min-w-0">
+                  <span className="block text-base font-bold leading-none sm:text-lg">
+                    5+
+                  </span>
+
+                  <span className="mt-1 block truncate text-[10px] text-slate-500 sm:text-xs">
+                    Events
+                  </span>
+                </div>
+
               </div>
 
-              <div className="rounded-2xl border border-white bg-white/65 px-4 py-3 shadow-sm backdrop-blur-xl">
-                <span className="text-lg font-bold">1</span>
-                <span className="ml-2 text-xs text-slate-500">
-                  Community
-                </span>
+
+              {/* COMMUNITY */}
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-white bg-white/65 px-3 py-3 shadow-sm backdrop-blur-xl sm:flex-none sm:px-4">
+
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                  <Sparkles size={15} />
+                </div>
+
+                <div className="min-w-0">
+                  <span className="block text-base font-bold leading-none sm:text-lg">
+                    1
+                  </span>
+
+                  <span className="mt-1 block truncate text-[10px] text-slate-500 sm:text-xs">
+                    Community
+                  </span>
+                </div>
+
               </div>
 
             </div>
