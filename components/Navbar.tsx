@@ -1,15 +1,19 @@
 "use client";
 
 import Link from "next/link";
+
 import {
   Moon,
   Sun,
   ArrowUpRight,
   Menu,
   X,
+  ShieldCheck,
 } from "lucide-react";
+
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+
 import JoinModal from "@/components/JoinModal";
 
 const links = [
@@ -28,10 +32,6 @@ export function Navbar() {
   const [joinOpen, setJoinOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
-  /* =========================================================
-     LOAD SAVED THEME
-     ========================================================= */
-
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
 
@@ -43,10 +43,6 @@ export function Navbar() {
       setDarkMode(false);
     }
   }, []);
-
-  /* =========================================================
-     TOGGLE DARK MODE
-     ========================================================= */
 
   const toggleDarkMode = () => {
     const html = document.documentElement;
@@ -61,10 +57,6 @@ export function Navbar() {
       setDarkMode(true);
     }
   };
-
-  /* =========================================================
-     ACTIVE PAGE
-     ========================================================= */
 
   const isActive = (href: string) => {
     if (href === "/") {
@@ -92,10 +84,7 @@ export function Navbar() {
             md:py-3
           "
         >
-          {/* =====================================================
-              LOGO
-              ===================================================== */}
-
+          {/* Logo */}
           <Link
             href="/"
             className="
@@ -121,7 +110,6 @@ export function Navbar() {
             />
 
             <div className="min-w-0 leading-tight">
-              {/* Technical Council */}
               <div
                 className="
                   whitespace-nowrap
@@ -136,7 +124,6 @@ export function Navbar() {
                 TECHNICAL COUNCIL
               </div>
 
-              {/* REC AMBEDKAR NAGAR */}
               <div
                 className="
                   whitespace-nowrap
@@ -152,10 +139,7 @@ export function Navbar() {
             </div>
           </Link>
 
-          {/* =====================================================
-              DESKTOP NAVIGATION
-              ===================================================== */}
-
+          {/* Desktop Navigation */}
           <div className="hidden items-center gap-1 md:flex">
             {links.map(([label, href]) => {
               const active = isActive(href);
@@ -172,7 +156,6 @@ export function Navbar() {
                     font-semibold
                     transition-all
                     duration-300
-
                     ${
                       active
                         ? `
@@ -186,7 +169,6 @@ export function Navbar() {
                           text-slate-950
                           hover:bg-slate-100/80
                           hover:text-slate-950
-
                           dark:text-slate-200
                           dark:hover:bg-white/10
                           dark:hover:text-white
@@ -200,10 +182,7 @@ export function Navbar() {
             })}
           </div>
 
-          {/* =====================================================
-              DESKTOP ACTIONS
-              ===================================================== */}
-
+          {/* Desktop Actions */}
           <div className="hidden items-center gap-2 md:flex">
             {/* Join Us */}
             <button
@@ -225,7 +204,26 @@ export function Navbar() {
               <ArrowUpRight size={16} />
             </button>
 
-            {/* Theme */}
+            {/* Admin */}
+            <Link
+              href="/admin"
+              className="
+                btn-primary
+                flex
+                items-center
+                gap-2
+                rounded-full
+                px-5
+                py-2.5
+                text-sm
+                font-bold
+              "
+            >
+              <ShieldCheck size={16} />
+              Admin
+            </Link>
+
+            {/* Dark Mode */}
             <button
               type="button"
               onClick={toggleDarkMode}
@@ -244,7 +242,6 @@ export function Navbar() {
                 soft-border
                 transition
                 hover:scale-105
-
                 dark:bg-white/10
               "
             >
@@ -262,13 +259,9 @@ export function Navbar() {
             </button>
           </div>
 
-          {/* =====================================================
-              MOBILE ACTIONS
-              JOIN US → HAMBURGER
-              ===================================================== */}
-
+          {/* Mobile Actions */}
           <div className="flex items-center gap-2 md:hidden">
-            {/* Mobile Join Us */}
+            {/* Join Us */}
             <button
               type="button"
               onClick={() => setJoinOpen(true)}
@@ -278,19 +271,19 @@ export function Navbar() {
                 shrink-0
                 items-center
                 gap-1
+                whitespace-nowrap
                 rounded-full
                 px-3
                 py-2
                 text-[11px]
                 font-bold
-                whitespace-nowrap
               "
             >
               Join Us
               <ArrowUpRight size={13} />
             </button>
 
-            {/* Mobile Menu Button */}
+            {/* Menu */}
             <button
               type="button"
               onClick={() => setOpen(!open)}
@@ -316,10 +309,7 @@ export function Navbar() {
           </div>
         </nav>
 
-        {/* =====================================================
-            MOBILE MENU
-            ===================================================== */}
-
+        {/* Mobile Menu */}
         {open && (
           <div
             className="
@@ -332,6 +322,7 @@ export function Navbar() {
               md:hidden
             "
           >
+            {/* Main Links */}
             {links.map(([label, href]) => {
               const active = isActive(href);
 
@@ -349,7 +340,6 @@ export function Navbar() {
                     font-semibold
                     transition-all
                     duration-300
-
                     ${
                       active
                         ? `
@@ -362,7 +352,6 @@ export function Navbar() {
                         : `
                           text-slate-950
                           hover:bg-slate-100
-
                           dark:text-slate-200
                           dark:hover:bg-white/10
                         `
@@ -374,10 +363,29 @@ export function Navbar() {
               );
             })}
 
-            {/* =================================================
-                MOBILE THEME BUTTON
-                ================================================= */}
+            {/* Admin */}
+            <Link
+              href="/admin"
+              onClick={() => setOpen(false)}
+              className="
+                btn-primary
+                mb-1
+                flex
+                w-full
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                px-4
+                py-3
+                font-bold
+              "
+            >
+              <ShieldCheck size={17} />
+              Admin
+            </Link>
 
+            {/* Dark Mode */}
             <button
               type="button"
               onClick={toggleDarkMode}
@@ -396,7 +404,6 @@ export function Navbar() {
                 py-3
                 font-semibold
                 text-slate-950
-
                 dark:border-white/10
                 dark:bg-white/10
                 dark:text-white
@@ -421,10 +428,7 @@ export function Navbar() {
         )}
       </header>
 
-      {/* =========================================================
-          JOIN POPUP
-          ========================================================= */}
-
+      {/* Join Modal */}
       <JoinModal
         open={joinOpen}
         onClose={() => setJoinOpen(false)}

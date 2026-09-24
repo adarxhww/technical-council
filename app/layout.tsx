@@ -1,7 +1,8 @@
 import "./globals.css";
+
 import type { Metadata } from "next";
-import { Navbar } from "@/components/Navbar";
-import { Footer } from "@/components/Footer";
+
+import SiteChrome from "@/components/SiteChrome";
 
 export const metadata: Metadata = {
   title: "Technical Council | REC Ambedkar Nagar",
@@ -12,19 +13,19 @@ export const metadata: Metadata = {
     url: "https://technical-council-portal.vercel.app",
     siteName: "Technical Council RECABN",
     locale: "en_US",
-    type: "website"
-  }
+    type: "website",
+  },
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="en">
       <body>
-        <div className="page-shell">
-          <Navbar />
-          {children}
-          <Footer />
-        </div>
+        <SiteChrome>{children}</SiteChrome>
       </body>
     </html>
   );

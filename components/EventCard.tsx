@@ -4,6 +4,7 @@ import { Clock, MapPin } from "lucide-react";
 import { useState } from "react";
 
 export interface EventItem {
+  id?: string;
   day: string;
   month: string;
   date: string;
@@ -13,142 +14,207 @@ export interface EventItem {
   description: string;
   duration: string;
   venue: string;
+  time?: string;
   link?: string;
 }
 
-export function EventCard({ event }: { event: EventItem }) {
+interface EventCardProps {
+  event: EventItem;
+  onRegister?: (event: EventItem) => void;
+}
+
+function getMonthYear(
+  dateValue: string,
+  fallbackMonth: string,
+  fallbackYear: string
+) {
+  if (!dateValue) {
+    return {
+      month: fallbackMonth,
+      year: fallbackYear,
+    };
+  }
+
+  const isoMatch = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (isoMatch) {
+    const [, year, month] = isoMatch;
+
+    const monthNames = [
+      "JAN",
+      "FEB",
+      "MAR",
+      "APR",
+      "MAY",
+      "JUN",
+      "JUL",
+      "AUG",
+      "SEP",
+      "OCT",
+      "NOV",
+      "DEC",
+    ];
+
+    return {
+      month: monthNames[Number(month) - 1] ?? fallbackMonth,
+      year,
+    };
+  }
+
+  const parsed = new Date(dateValue);
+
+  if (!Number.isNaN(parsed.getTime())) {
+    return {
+      month: parsed
+        .toLocaleString("en-US", {
+          month: "short",
+        })
+        .toUpperCase(),
+      year: parsed.getFullYear().toString(),
+    };
+  }
+
+  return {
+    month: fallbackMonth,
+    year: fallbackYear,
+  };
+}
+
+export function EventCard({
+  event,
+  onRegister,
+}: EventCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const isCompleted =
     event.date !== "" &&
     new Date(`${event.date}T23:59:59`) < new Date();
 
+  const { month, year } = getMonthYear(
+    event.date,
+    event.day,
+    event.month
+  );
+
+  function handleRegister() {
+    if (isCompleted) {
+      return;
+    }
+
+    if (onRegister) {
+      onRegister(event);
+      return;
+    }
+
+    if (event.link) {
+      window.open(
+        event.link,
+        "_blank",
+        "noopener,noreferrer"
+      );
+      return;
+    }
+
+    setIsExpanded((current) => !current);
+  }
+
   return (
-    <div className="glass card-hover flex flex-col items-start justify-between gap-6 rounded-[28px] p-6 md:flex-row md:items-center md:p-8">
+    <div className="glass card-hover flex flex-col gap-6 rounded-[28px] p-6 md:flex-row md:items-center md:p-8">
 
-      {/* Date Box & Content */}
-      <div className="flex items-center gap-4 md:gap-6">
+      {/* LEFT — DATE + EVENT INFORMATION */}
+      <div className="flex min-w-0 flex-1 items-center gap-4 md:gap-6">
 
-        {/* Date */}
-        <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-white text-center shadow-sm soft-border dark:bg-slate-900/70 dark:border-white/10">
+        {/* MONTH + YEAR */}
+        <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-white text-center shadow-sm soft-border dark:border-white/10 dark:bg-slate-900/70">
           <div>
             <div className="text-xl font-black tracking-wider text-slate-900 dark:text-white">
-              {event.day}
+              {month}
             </div>
 
-            <div className="text-xs font-bold text-slate-500 dark:text-slate-500">
-              {event.month}
+            <div className="text-xs font-bold text-slate-500 dark:text-slate-400">
+              {year}
             </div>
           </div>
         </div>
 
-        {/* Event Details */}
-        <div>
+        {/* EVENT DETAILS */}
+        <div className="min-w-0">
           <div className="mb-1 flex flex-wrap items-center gap-2">
-
-            {/* Event Title */}
             <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">
               {event.title}
             </h3>
 
-            {/* Tag */}
             <span className="rounded-full bg-blue-50 px-3 py-0.5 text-xs font-bold text-blue-600 soft-border dark:border-blue-400/20 dark:bg-blue-500/15 dark:text-blue-300">
               {event.tag}
             </span>
           </div>
 
-          {/* Subtitle */}
           <p className="mb-1 text-sm font-bold text-slate-700 dark:text-slate-300">
             {event.subtitle}
           </p>
 
-          {/* Description */}
           <p className="max-w-2xl text-sm text-slate-600 dark:text-slate-400">
             {event.description}
           </p>
         </div>
       </div>
 
-      {/* Meta & Action */}
-      <div className="flex w-full flex-col items-start justify-between gap-6 border-t border-slate-200 pt-4 dark:border-white/10 md:w-auto md:flex-row md:items-center md:justify-end md:border-t-0 md:pt-0">
+      {/* RIGHT — FIXED WIDTH META + BUTTON */}
+      <div className="flex shrink-0 flex-col gap-5 border-t border-slate-200 pt-4 dark:border-white/10 md:w-[330px] md:flex-row md:items-center md:border-t-0 md:pt-0">
 
-        {/* Time & Venue */}
-        <div className="flex flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-400">
+        {/* TIME + VENUE */}
+        <div className="grid w-[140px] shrink-0 grid-cols-[20px_1fr] gap-x-2 gap-y-2">
 
-          {/* Duration */}
-          <div className="flex items-center gap-1.5">
-            <Clock
-              size={14}
-              className="text-slate-500 dark:text-slate-500"
-            />
+          {/* TIME ICON */}
+          <Clock
+            size={16}
+            className="mt-0.5 text-slate-500 dark:text-slate-400"
+          />
 
-            <span className="text-slate-600 dark:text-slate-400">
-              {event.duration} Duration
-            </span>
-          </div>
+          {/* TIME */}
+          <span className="whitespace-nowrap text-xs font-medium leading-5 text-slate-600 dark:text-slate-400">
+            {event.time || "Time TBA"}
+          </span>
 
-          {/* Venue */}
-          <div className="flex items-center gap-1.5">
-            <MapPin
-              size={14}
-              className="text-emerald-500"
-            />
+          {/* VENUE ICON */}
+          <MapPin
+            size={16}
+            className="mt-0.5 text-emerald-500"
+          />
 
-            <span className="text-slate-600 dark:text-slate-400">
-              {event.venue}
-            </span>
-          </div>
+          {/* VENUE */}
+          <span className="whitespace-nowrap text-xs font-medium leading-5 text-slate-600 dark:text-slate-400">
+            {event.venue || "Venue TBA"}
+          </span>
         </div>
 
-        {/* Action Button */}
-        <div
-          onClick={() => {
-            if (!isCompleted) {
-              setIsExpanded(!isExpanded);
-            }
-          }}
-          className={`flex h-12 shrink-0 items-center overflow-hidden rounded-full font-bold text-white shadow-md transition-all duration-300 ease-in-out ${
+        {/* REGISTER BUTTON */}
+        <button
+          type="button"
+          onClick={handleRegister}
+          disabled={isCompleted}
+          className={`flex h-12 shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white shadow-md transition-all duration-300 ${
             isCompleted
               ? "cursor-default bg-slate-500 px-6"
               : `cursor-pointer bg-gradient-to-r from-blue-600 to-emerald-500 hover:opacity-95 ${
                   isExpanded
-                    ? "max-w-[220px] px-6"
-                    : "max-w-[150px] justify-center px-6"
+                    ? "w-[180px]"
+                    : "w-[150px]"
                 }`
           }`}
         >
           {isCompleted ? (
-            <span className="whitespace-nowrap text-sm font-bold text-white">
+            <span className="whitespace-nowrap text-sm font-bold">
               Ended
             </span>
-          ) : event.link ? (
-            <a
-              href={event.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className={`whitespace-nowrap text-sm font-bold text-white transition-all duration-300 hover:underline ${
-                isExpanded
-                  ? "opacity-100"
-                  : "overflow-hidden opacity-90"
-              }`}
-            >
-              Register Now →
-            </a>
           ) : (
-            <span
-              className={`whitespace-nowrap text-sm font-bold text-white transition-all duration-300 ${
-                isExpanded
-                  ? "opacity-100"
-                  : "overflow-hidden opacity-90"
-              }`}
-            >
+            <span className="whitespace-nowrap text-sm font-bold">
               {isExpanded
                 ? "Not Started Yet."
                 : "Register Now →"}
             </span>
           )}
-        </div>
+        </button>
       </div>
     </div>
   );

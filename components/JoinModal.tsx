@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Send } from "lucide-react";
+import { X, Send, FileText, CheckCircle2 } from "lucide-react";
 
 export default function JoinModal({
   open,
@@ -13,19 +13,8 @@ export default function JoinModal({
   const [skills, setSkills] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-
-  const GOOGLE_SCRIPT_URL =
-    "https://script.google.com/a/macros/recabn.ac.in/s/AKfycbzT1mQcCAMU_bXOCT1z5mPMup1aSgjonpk-hoP3kEtna3FnxGueMUhIdYignG4jcEFZgw/exec";
-
-  if (!open) return null;
-
-  const toggleSkill = (skill: string) => {
-    setSkills((current) =>
-      current.includes(skill)
-        ? current.filter((item) => item !== skill)
-        : [...current, skill]
-    );
-  };
+  const [error, setError] = useState("");
+  const [resumeName, setResumeName] = useState("");
 
   const technicalSkills = [
     "Web Development",
@@ -42,6 +31,156 @@ export default function JoinModal({
     "Other",
   ];
 
+  if (!open) return null;
+
+  const toggleSkill = (skill: string) => {
+    setSkills((current) =>
+      current.includes(skill)
+        ? current.filter((item) => item !== skill)
+        : [...current, skill]
+    );
+  };
+
+  const handleResumeChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setError("");
+
+    const file = e.target.files?.[0];
+
+    if (!file) {
+      setResumeName("");
+      return;
+    }
+
+    const allowedTypes = [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ];
+
+    const allowedExtensions = [".pdf", ".doc", ".docx"];
+
+    const fileName = file.name.toLowerCase();
+
+    const hasValidExtension = allowedExtensions.some((extension) =>
+      fileName.endsWith(extension)
+    );
+
+    if (!hasValidExtension || !allowedTypes.includes(file.type)) {
+      e.target.value = "";
+      setResumeName("");
+      setError("Please upload a PDF, DOC, or DOCX file.");
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      e.target.value = "";
+      setResumeName("");
+      setError("Resume size must be 5 MB or less.");
+      return;
+    }
+
+    setResumeName(file.name);
+  };
+
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>
+  ) => {
+    e.preventDefault();
+
+    if (submitting) return;
+
+    setSubmitting(true);
+    setSubmitted(false);
+    setError("");
+
+    try {
+      const form = e.currentTarget;
+      const formData = new FormData(form);
+
+      const resume = formData.get("resume");
+
+      if (
+        resume instanceof File &&
+        resume.size > 0 &&
+        resume.size > 5 * 1024 * 1024
+      ) {
+        throw new Error("Resume size must be 5 MB or less.");
+      }
+
+      /*
+       * Technical skills are stored as an array.
+       */
+      formData.delete("technical_skills");
+
+      skills.forEach((skill) => {
+        formData.append("technical_skills", skill);
+      });
+
+      /*
+       * The API receives:
+       *
+       * full_name
+       * email
+       * whatsapp_number
+       * branch
+       * year
+       * technical_skills[]
+       * other_skill
+       * areas_of_interest
+       * why_join
+       * resume
+       */
+
+      const response = await fetch(
+        "/api/recruitment/applications",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      let result: {
+        success?: boolean;
+        message?: string;
+      } = {};
+
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error(
+          "The server returned an invalid response."
+        );
+      }
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.message || "Application submission failed."
+        );
+      }
+
+      setSubmitted(true);
+      setSkills([]);
+      setResumeName("");
+      setError("");
+
+      form.reset();
+    } catch (err) {
+      console.error("Join application submission error:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-md"
@@ -56,7 +195,7 @@ export default function JoinModal({
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="join-modal-close absolute right-5 top-5 grid h-10 w-10 place-items-center rounded-full bg-white soft-border text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+          className="join-modal-close absolute right-5 top-5 grid h-10 w-10 place-items-center rounded-full bg-white text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-900"
         >
           <X size={19} />
         </button>
@@ -68,8 +207,8 @@ export default function JoinModal({
           </span>
 
           <p className="join-modal-notice mt-3 text-xs font-medium text-amber-600">
-            First-year recruitment has not started yet. Applications for
-            first-year students will open soon.
+            First-year recruitment has not started yet. Applications
+            for first-year students will open soon.
           </p>
 
           <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-900">
@@ -77,56 +216,15 @@ export default function JoinModal({
           </h2>
 
           <p className="join-modal-description mt-2 text-sm leading-6 text-slate-500">
-            Tell us a little about yourself and your technical interests.
+            Tell us a little about yourself and your technical
+            interests.
           </p>
         </div>
 
         {/* Form */}
         <form
           className="mt-7 grid gap-4"
-          onSubmit={async (e) => {
-            e.preventDefault();
-
-            if (submitting) return;
-
-            const form = e.currentTarget;
-            const formData = new FormData(form);
-
-            setSubmitting(true);
-
-            try {
-              const data = {
-                name: formData.get("name")?.toString() || "",
-                email: formData.get("email")?.toString() || "",
-                whatsapp: formData.get("whatsapp")?.toString() || "",
-                branch: formData.get("branch")?.toString() || "",
-                year: formData.get("year")?.toString() || "",
-                skills: skills.join(", "),
-                interest: formData.get("interest")?.toString() || "",
-                reason: formData.get("reason")?.toString() || "",
-              };
-
-              const response = await fetch(GOOGLE_SCRIPT_URL, {
-                method: "POST",
-                body: JSON.stringify(data),
-              });
-
-              const result = await response.json();
-
-              if (!result.success) {
-                throw new Error(result.message || "Submission failed");
-              }
-
-              setSubmitted(true);
-              form.reset();
-              setSkills([]);
-            } catch (error) {
-              console.error(error);
-              alert("Something went wrong. Please try again.");
-            } finally {
-              setSubmitting(false);
-            }
-          }}
+          onSubmit={handleSubmit}
         >
           {/* Name + Email */}
           <div className="grid gap-4 sm:grid-cols-2">
@@ -137,10 +235,10 @@ export default function JoinModal({
 
               <input
                 type="text"
-                name="name"
+                name="full_name"
                 required
                 placeholder="Your full name"
-                className="w-full rounded-2xl bg-white px-4 py-3.5 text-sm outline-none soft-border transition focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-2xl bg-white px-4 py-3.5 text-sm outline-none shadow-sm transition focus:ring-2 focus:ring-blue-100"
               />
             </div>
 
@@ -154,7 +252,7 @@ export default function JoinModal({
                 name="email"
                 required
                 placeholder="your@email.com"
-                className="w-full rounded-2xl bg-white px-4 py-3.5 text-sm outline-none soft-border transition focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-2xl bg-white px-4 py-3.5 text-sm outline-none shadow-sm transition focus:ring-2 focus:ring-blue-100"
               />
             </div>
           </div>
@@ -167,10 +265,10 @@ export default function JoinModal({
 
             <input
               type="tel"
-              name="whatsapp"
+              name="whatsapp_number"
               required
               placeholder="+91 XXXXX XXXXX"
-              className="w-full rounded-2xl bg-white px-4 py-3.5 text-sm outline-none soft-border transition focus:ring-2 focus:ring-blue-100"
+              className="w-full rounded-2xl bg-white px-4 py-3.5 text-sm outline-none shadow-sm transition focus:ring-2 focus:ring-blue-100"
             />
           </div>
 
@@ -184,7 +282,7 @@ export default function JoinModal({
               <select
                 name="branch"
                 required
-                className="w-full rounded-2xl bg-white px-4 py-3.5 text-sm text-slate-600 outline-none soft-border"
+                className="w-full rounded-2xl bg-white px-4 py-3.5 text-sm text-slate-600 outline-none shadow-sm"
               >
                 <option value="">Select branch</option>
                 <option>Information Technology</option>
@@ -201,10 +299,10 @@ export default function JoinModal({
               <select
                 name="year"
                 required
-                className="w-full rounded-2xl bg-white px-4 py-3.5 text-sm text-slate-600 outline-none soft-border"
+                className="w-full rounded-2xl bg-white px-4 py-3.5 text-sm text-slate-600 outline-none shadow-sm"
               >
                 <option value="">Select year</option>
-                {/* <option>1st Year</option> */}
+                {/* First year intentionally disabled */}
                 <option>2nd Year</option>
                 <option>3rd Year</option>
                 <option>4th Year</option>
@@ -230,7 +328,7 @@ export default function JoinModal({
                     className={`join-skill rounded-full px-3.5 py-2 text-xs font-semibold transition ${
                       selected
                         ? "join-skill-selected bg-slate-950 text-white shadow-sm"
-                        : "bg-white text-slate-600 soft-border hover:bg-slate-50"
+                        : "bg-white text-slate-600 shadow-sm hover:bg-slate-50"
                     }`}
                   >
                     {skill}
@@ -238,6 +336,10 @@ export default function JoinModal({
                 );
               })}
             </div>
+
+            <p className="mt-2 text-xs text-slate-400">
+              Select all skills that apply to you.
+            </p>
           </div>
 
           {/* Areas of Interest */}
@@ -248,9 +350,9 @@ export default function JoinModal({
 
             <input
               type="text"
-              name="interest"
+              name="areas_of_interest"
               placeholder="e.g. Web Development, AI, Robotics..."
-              className="w-full rounded-2xl bg-white px-4 py-3.5 text-sm outline-none soft-border transition focus:ring-2 focus:ring-blue-100"
+              className="w-full rounded-2xl bg-white px-4 py-3.5 text-sm outline-none shadow-sm transition focus:ring-2 focus:ring-blue-100"
             />
           </div>
 
@@ -261,17 +363,64 @@ export default function JoinModal({
             </label>
 
             <textarea
-              name="reason"
+              name="why_join"
               rows={4}
               placeholder="Tell us briefly about your interest..."
-              className="w-full resize-none rounded-2xl bg-white px-4 py-3.5 text-sm outline-none soft-border transition focus:ring-2 focus:ring-blue-100"
+              className="w-full resize-none rounded-2xl bg-white px-4 py-3.5 text-sm outline-none shadow-sm transition focus:ring-2 focus:ring-blue-100"
             />
           </div>
 
-          {/* Success Message */}
+          {/* CV / Resume */}
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
+              CV / Resume{" "}
+            </label>
+
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-4 transition hover:border-blue-300 hover:bg-blue-50/30">
+              <div className="flex items-start gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-slate-500 shadow-sm">
+                  <FileText size={18} />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <input
+                    type="file"
+                    name="resume"
+                    accept=".pdf,application/pdf"
+                    onChange={handleResumeChange}
+                    className="block w-full cursor-pointer text-sm text-slate-500
+                      file:mr-4 file:rounded-xl file:border-0
+                      file:bg-slate-950 file:px-4 file:py-2.5
+                      file:text-xs file:font-semibold file:text-white
+                      hover:file:bg-slate-800"
+                  />
+
+                  {resumeName ? (
+                    <p className="mt-2 truncate text-xs font-medium text-slate-600">
+                      Selected: {resumeName}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-400">
+                      PDF only · Maximum 5 MB
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+              {error}
+            </div>
+          )}
+
+          {/* Success */}
           {submitted && (
-            <div className="join-success rounded-2xl bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700">
-              ✓ Application submitted successfully!
+            <div className="join-success flex items-center justify-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700">
+              <CheckCircle2 size={18} />
+              Application submitted successfully!
             </div>
           )}
 
@@ -279,7 +428,7 @@ export default function JoinModal({
           <button
             type="submit"
             disabled={submitting}
-            className="join-submit mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3.5 text-sm font-bold text-white shadow-xl shadow-slate-900/15 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+            className="join-submit mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3.5 text-sm font-bold text-white shadow-xl shadow-slate-900/15 transition hover:-translate-y-0.5 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? "Submitting..." : "Submit Application"}
             <Send size={16} />

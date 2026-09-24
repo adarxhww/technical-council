@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
 import {
   Camera,
   Search,
@@ -9,80 +10,39 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-/* =====================================================
-   GALLERY DATA
-   ===================================================== */
-
-const photos = [
-  {
-    title: "Ideathon",
-    categories: ["Events", "Competitions"],
-    images: [
-      "https://res.cloudinary.com/d5zrwuru/image/upload/v1786742504/jawvcslq6lntm19io1ry.jpg",
-      "https://res.cloudinary.com/d5zrwuru/image/upload/v1786742501/ted3uxtxxxvrlcvb61ys.jpg",
-      "https://res.cloudinary.com/d5zrwuru/image/upload/v1786742506/l2tpvspffugtg9qkesc1.jpg",
-    ],
-  },
-  {
-    title: "Posters/Banners",
-    categories: ["Posters/Banners"],
-    images: [
-      "https://res.cloudinary.com/d5zrwuru/image/upload/v1786722928/E-Sports_poster.jpg",
-      "https://res.cloudinary.com/d5zrwuru/image/upload/v1786722929/Ideathon_Poster.jpg",
-      "https://res.cloudinary.com/d5zrwuru/image/upload/v1786722914/Aptitude_test_poster.jpg",
-    ],
-  },
-  {
-    title: "Aptitude Test",
-    categories: ["Events", "Competitions"],
-    images: [
-      "https://res.cloudinary.com/d5zrwuru/image/upload/v1786742501/ted3uxtxxxvrlcvb61ys.jpg",
-    ],
-  },
-  {
-    title: "Farewell",
-    categories: ["Events", "Celebrations"],
-    images: [
-      "https://res.cloudinary.com/d5zrwuru/image/upload/v1786742461/mdtauhmsof6aavy7oxkc.jpg",
-      "https://res.cloudinary.com/d5zrwuru/image/upload/v1786742344/tbkaafwolcgk6wurxt7d.jpg",
-      "https://res.cloudinary.com/d5zrwuru/image/upload/v1786742346/kfyynfebeslrluhevoqq.png",
-    ],
-  },
-  {
-    title: "E-Sports",
-    categories: ["Events", "Competitions"],
-    images: [
-      "https://res.cloudinary.com/d5zrwuru/image/upload/v1786742486/qxzi75iwdzaw1ebd8zgn.jpg",
-    ],
-  },
-  {
-    title: "Treasure Hunt",
-    categories: ["Events", "Behind the Scenes"],
-    images: [
-      "https://res.cloudinary.com/d5zrwuru/image/upload/v1786742579/ava3pjsn1pzayh8jg502.jpg",
-      "https://res.cloudinary.com/d5zrwuru/image/upload/v1786742549/sblbdpk7nt3lt2h2ug1l.jpg",
-    ],
-  },
-];
+import { createClient } from "@/lib/supabase/client";
 
 /* =====================================================
-   FILTERS
+   TYPES
    ===================================================== */
 
-const filters = [
-  "All",
-  "Events",
-  "Competitions",
-  "Celebrations",
-  "Posters/Banners",
-  "Behind the Scenes",
-];
+type GalleryItem = {
+  id: string;
+  title: string;
+  category: string;
+  date: string;
+  image_path: string;
+  image_url: string;
+  published: boolean;
+};
+
+type GalleryGroup = {
+  id: string;
+  title: string;
+  categories: string[];
+  images: string[];
+};
 
 /* =====================================================
    GALLERY PAGE
    ===================================================== */
 
 export default function GalleryPage() {
+  const supabase = createClient();
+
+  const [photos, setPhotos] = useState<GalleryGroup[]>([]);
+  const [filters, setFilters] = useState<string[]>(["All"]);
+
   const [activeFilter, setActiveFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -90,11 +50,110 @@ export default function GalleryPage() {
     Record<string, number>
   >({});
 
-  const [activeGallery, setActiveGallery] = useState<
-    (typeof photos)[number] | null
-  >(null);
+  const [activeGallery, setActiveGallery] =
+    useState<GalleryGroup | null>(null);
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  const [loading, setLoading] = useState(true);
+
+  /* =====================================================
+     LOAD GALLERY FROM SUPABASE
+     ===================================================== */
+
+  useEffect(() => {
+    const loadGallery = async () => {
+      setLoading(true);
+
+      const { data, error } = await supabase
+        .from("gallery_items")
+        .select(
+          `
+            id,
+            title,
+            category,
+            date,
+            image_path,
+            image_url,
+            published
+          `
+        )
+        .eq("published", true)
+        .order("created_at", {
+          ascending: false,
+        });
+
+      if (error) {
+        console.error("Gallery load error:", error);
+
+        setPhotos([]);
+        setFilters(["All"]);
+        setLoading(false);
+
+        return;
+      }
+
+      const items = (data ?? []) as GalleryItem[];
+
+      /* =====================================================
+         GROUP PHOTOS BY TITLE
+         ===================================================== */
+
+      const grouped = new Map<string, GalleryGroup>();
+
+      items.forEach((item) => {
+        const existing = grouped.get(item.title);
+
+        if (existing) {
+          existing.images.push(item.image_url);
+
+          if (
+            !existing.categories.includes(
+              item.category
+            )
+          ) {
+            existing.categories.push(item.category);
+          }
+        } else {
+          grouped.set(item.title, {
+            id: item.id,
+            title: item.title,
+            categories: [item.category],
+            images: [item.image_url],
+          });
+        }
+      });
+
+      const galleryGroups = Array.from(
+        grouped.values()
+      );
+
+      setPhotos(galleryGroups);
+
+      /* =====================================================
+         BUILD FILTERS FROM DATABASE
+         ===================================================== */
+
+      const categorySet = new Set<string>();
+
+      items.forEach((item) => {
+        if (item.category.trim()) {
+          categorySet.add(item.category);
+        }
+      });
+
+      setFilters([
+        "All",
+        ...Array.from(categorySet).sort((a, b) =>
+          a.localeCompare(b)
+        ),
+      ]);
+
+      setLoading(false);
+    };
+
+    loadGallery();
+  }, []);
 
   /* =====================================================
      FILTER + SEARCH
@@ -116,10 +175,9 @@ export default function GalleryPage() {
      OPEN POPUP
      ===================================================== */
 
-  const openGallery = (
-    photo: (typeof photos)[number]
-  ) => {
-    const currentIndex = slideIndexes[photo.title] ?? 0;
+  const openGallery = (photo: GalleryGroup) => {
+    const currentIndex =
+      slideIndexes[photo.id] ?? 0;
 
     setActiveGallery(photo);
     setActiveImageIndex(currentIndex);
@@ -135,7 +193,7 @@ export default function GalleryPage() {
   };
 
   /* =====================================================
-     PREVIOUS
+     PREVIOUS IMAGE
      ===================================================== */
 
   const previousImage = () => {
@@ -151,7 +209,7 @@ export default function GalleryPage() {
   };
 
   /* =====================================================
-     NEXT
+     NEXT IMAGE
      ===================================================== */
 
   const nextImage = () => {
@@ -159,7 +217,8 @@ export default function GalleryPage() {
 
     setActiveImageIndex(
       (current) =>
-        (current + 1) % activeGallery.images.length
+        (current + 1) %
+        activeGallery.images.length
     );
   };
 
@@ -184,7 +243,10 @@ export default function GalleryPage() {
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
 
     return () => {
       window.removeEventListener(
@@ -200,13 +262,11 @@ export default function GalleryPage() {
 
   return (
     <main className="gallery-page container pb-20 pt-16">
-
       {/* =====================================================
           HERO
           ===================================================== */}
 
       <section className="relative overflow-hidden rounded-[34px] p-7 md:p-12">
-
         {/* Background glow */}
 
         <div className="blur-orb right-20 top-8 z-0 h-56 w-56 bg-blue-300 dark:bg-blue-500" />
@@ -219,19 +279,19 @@ export default function GalleryPage() {
           <img
             src="/images/gallery-3d.png"
             alt="Gallery camera illustration"
-            className="h-72 w-72 -translate-x-0 -translate-y-16 object-contain md:h-[420px] md:w-[420px] md:translate-x-0 md:-translate-y-20"
+            className="h-72 w-72 -translate-y-16 object-contain md:h-[420px] md:w-[420px] md:-translate-y-20"
           />
         </div>
 
         {/* Hero Content */}
 
         <div className="relative z-20 max-w-2xl">
-
           <span className="gallery-badge mb-5 inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 text-xs font-bold soft-border dark:bg-white/10 dark:text-white">
             <Camera
               size={15}
               className="text-emerald-500"
             />
+
             Moments of Innovation
           </span>
 
@@ -244,7 +304,6 @@ export default function GalleryPage() {
             workshops and activities. Every moment inspires
             the next.
           </p>
-
         </div>
       </section>
 
@@ -253,12 +312,13 @@ export default function GalleryPage() {
           ===================================================== */}
 
       <div className="gallery-filter-bar glass mt-5 flex flex-wrap gap-2 rounded-[24px] p-3">
-
         {filters.map((filter) => (
           <button
             key={filter}
             type="button"
-            onClick={() => setActiveFilter(filter)}
+            onClick={() =>
+              setActiveFilter(filter)
+            }
             className={`gallery-filter-button rounded-full px-4 py-2 text-sm font-bold transition-all duration-300 ${
               activeFilter === filter
                 ? "btn-primary"
@@ -272,101 +332,141 @@ export default function GalleryPage() {
         {/* Search */}
 
         <div className="gallery-search ml-auto flex min-w-[220px] items-center gap-2 rounded-full bg-white px-4 py-2 text-sm text-slate-400 soft-border dark:bg-white/10">
-
           <Search size={16} />
 
           <input
             value={searchQuery}
             onChange={(event) =>
-              setSearchQuery(event.target.value)
+              setSearchQuery(
+                event.target.value
+              )
             }
             className="w-full bg-transparent text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200"
             placeholder="Search photos..."
           />
-
         </div>
       </div>
 
       {/* =====================================================
-          GALLERY GRID
+          LOADING
           ===================================================== */}
 
-      {filteredPhotos.length > 0 ? (
+      {loading ? (
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map(
+            (_, index) => (
+              <div
+                key={index}
+                className="glass animate-pulse overflow-hidden rounded-[26px]"
+              >
+                <div className="aspect-[4/3] bg-slate-200/70 dark:bg-white/10" />
+              </div>
+            )
+          )}
+        </div>
+      ) : filteredPhotos.length > 0 ? (
+        /* =====================================================
+           GALLERY GRID
+           ===================================================== */
 
         <div className="gallery-grid mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-
           {filteredPhotos.map((photo, i) => {
-
             const currentImageIndex =
-              slideIndexes[photo.title] ?? 0;
+              slideIndexes[photo.id] ?? 0;
 
             const currentImage =
               photo.images[currentImageIndex];
 
+            /*
+             * IMPORTANT:
+             * Posters/Banners always use the original
+             * 210:297 portrait ratio.
+             */
+
+            const isPoster =
+              photo.title ===
+                "Posters/Banners" ||
+              photo.categories.includes(
+                "Posters/Banners"
+              );
+
             return (
               <button
-                key={photo.title}
+                key={photo.id}
                 type="button"
-                onClick={() => openGallery(photo)}
+                onClick={() =>
+                  openGallery(photo)
+                }
                 className={`gallery-card glass group relative overflow-hidden rounded-[26px] text-left ${
-                  i === 0 ? "lg:col-span-2" : ""
+                  i === 0 && !isPoster
+                    ? "lg:col-span-2"
+                    : ""
                 }`}
               >
-
-                {/* Image */}
+                {/* =====================================================
+                    IMAGE CONTAINER
+                    ===================================================== */}
 
                 <div
                   className={`relative overflow-hidden ${
-                    photo.title === "Posters/Banners"
+                    isPoster
                       ? "aspect-[210/297] bg-white"
                       : "aspect-[4/3]"
                   }`}
                 >
-
                   <img
                     key={currentImage}
                     src={currentImage}
                     alt={photo.title}
                     className={`absolute inset-0 h-full w-full transition-all duration-700 ease-in-out ${
-                      photo.title === "Posters/Banners"
+                      isPoster
                         ? "object-contain"
                         : "object-cover group-hover:scale-105"
                     }`}
                   />
 
-                  {/* Overlay */}
+                  {/* =====================================================
+                      OVERLAY
+                      ===================================================== */}
 
                   <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent opacity-70 transition-opacity duration-300 group-hover:opacity-90" />
 
-                  {/* Image indicators */}
+                  {/* =====================================================
+                      IMAGE INDICATORS
+                      ===================================================== */}
 
                   {photo.images.length > 1 && (
                     <div className="absolute left-1/2 top-4 flex -translate-x-1/2 gap-1.5">
-                      {photo.images.map((_, imageIndex) => (
-                        <span
-                          key={imageIndex}
-                          className={`h-1.5 rounded-full transition-all duration-300 ${
-                            imageIndex === currentImageIndex
-                              ? "w-6 bg-white"
-                              : "w-1.5 bg-white/50"
-                          }`}
-                        />
-                      ))}
+                      {photo.images.map(
+                        (_, imageIndex) => (
+                          <span
+                            key={imageIndex}
+                            className={`h-1.5 rounded-full transition-all duration-300 ${
+                              imageIndex ===
+                              currentImageIndex
+                                ? "w-6 bg-white"
+                                : "w-1.5 bg-white/50"
+                            }`}
+                          />
+                        )
+                      )}
                     </div>
                   )}
 
-                  {/* Click hint */}
+                  {/* =====================================================
+                      CLICK HINT
+                      ===================================================== */}
 
                   <div className="absolute right-4 top-4 rounded-full bg-black/30 px-3 py-1.5 text-[11px] font-semibold text-white opacity-0 backdrop-blur-md transition-opacity duration-300 group-hover:opacity-100">
                     Click to view
                   </div>
 
-                  {/* Bottom information */}
+                  {/* =====================================================
+                      BOTTOM INFORMATION
+                      ===================================================== */}
 
                   <div className="absolute bottom-0 left-0 right-0 p-5">
-
                     <div className="flex items-end justify-between gap-3">
-
                       <div>
                         <h3 className="text-lg font-extrabold text-white">
                           {photo.title}
@@ -374,7 +474,8 @@ export default function GalleryPage() {
 
                         <p className="mt-1 text-xs font-medium text-white/70">
                           {photo.images.length}{" "}
-                          {photo.images.length === 1
+                          {photo.images.length ===
+                          1
                             ? "photo"
                             : "photos"}
                         </p>
@@ -383,24 +484,20 @@ export default function GalleryPage() {
                       <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/15 text-white backdrop-blur-md">
                         <Camera size={18} />
                       </div>
-
                     </div>
                   </div>
                 </div>
               </button>
             );
           })}
-
         </div>
-
       ) : (
-
-        /* No results */
+        /* =====================================================
+           NO RESULTS
+           ===================================================== */
 
         <div className="glass mt-5 flex min-h-[220px] items-center justify-center rounded-[26px]">
-
           <div className="text-center">
-
             <Camera
               size={38}
               className="mx-auto mb-3 text-slate-400"
@@ -413,9 +510,7 @@ export default function GalleryPage() {
             <p className="mt-1 text-sm text-slate-400">
               Try another category or search term.
             </p>
-
           </div>
-
         </div>
       )}
 
@@ -428,13 +523,15 @@ export default function GalleryPage() {
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-4 backdrop-blur-xl"
           onClick={closeGallery}
         >
-
           <div
             className="relative flex h-full w-full max-w-7xl items-center justify-center"
-            onClick={(event) => event.stopPropagation()}
+            onClick={(event) =>
+              event.stopPropagation()
+            }
           >
-
-            {/* Close */}
+            {/* =====================================================
+                CLOSE
+                ===================================================== */}
 
             <button
               type="button"
@@ -445,7 +542,9 @@ export default function GalleryPage() {
               <X size={22} />
             </button>
 
-            {/* Title */}
+            {/* =====================================================
+                TITLE
+                ===================================================== */}
 
             <div className="absolute left-2 top-3 z-20 md:left-4 md:top-5">
               <h2 className="text-lg font-bold text-white md:text-xl">
@@ -458,10 +557,11 @@ export default function GalleryPage() {
               </p>
             </div>
 
-            {/* Main Image */}
+            {/* =====================================================
+                MAIN IMAGE
+                ===================================================== */}
 
             <div className="flex h-[75vh] w-full items-center justify-center">
-
               <img
                 key={activeImageIndex}
                 src={
@@ -474,10 +574,11 @@ export default function GalleryPage() {
                 }`}
                 className="max-h-full max-w-[90%] rounded-2xl object-contain shadow-2xl transition-all duration-300 ease-out"
               />
-
             </div>
 
-            {/* Previous */}
+            {/* =====================================================
+                PREVIOUS
+                ===================================================== */}
 
             {activeGallery.images.length > 1 && (
               <button
@@ -490,7 +591,9 @@ export default function GalleryPage() {
               </button>
             )}
 
-            {/* Next */}
+            {/* =====================================================
+                NEXT
+                ===================================================== */}
 
             {activeGallery.images.length > 1 && (
               <button
@@ -503,11 +606,12 @@ export default function GalleryPage() {
               </button>
             )}
 
-            {/* Bottom indicators */}
+            {/* =====================================================
+                BOTTOM INDICATORS
+                ===================================================== */}
 
             {activeGallery.images.length > 1 && (
               <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
-
                 {activeGallery.images.map(
                   (_, index) => (
                     <button
@@ -517,20 +621,21 @@ export default function GalleryPage() {
                         index + 1
                       }`}
                       onClick={() =>
-                        setActiveImageIndex(index)
+                        setActiveImageIndex(
+                          index
+                        )
                       }
                       className={`h-2 rounded-full transition-all duration-300 ${
-                        index === activeImageIndex
+                        index ===
+                        activeImageIndex
                           ? "w-8 bg-white"
                           : "w-2 bg-white/40 hover:bg-white/70"
                       }`}
                     />
                   )
                 )}
-
               </div>
             )}
-
           </div>
         </div>
       )}

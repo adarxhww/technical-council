@@ -1,99 +1,163 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
 import { CalendarDays } from "lucide-react";
+
 import { EventCard, type EventItem } from "@/components/EventCard";
 
-const events: EventItem[] = [
-  {
-    day: "AUG",
-    month: "2026",
-    date: "2026-08-20",
-    title: "Tech Fusion !!",
-    tag: "Welcome Ceremony",
-    subtitle: "Chaos, Fun, and Fresh Beginnings!",
-    description:
-      "Dive into wild random mini-games, fun icebreakers, and spontaneous challenges. Laugh out loud and kickstart an amazing journey!.",
-    duration: "3 Hours",
-    venue: "Auditorium",
-    // link: "https://www.youtube.com/",
-  },
-  {
-    day: "SEP",
-    month: "2026",
-    date: "2026-09-15",
-    title: "Aptitude Test",
-    tag: "Competitive",
-    subtitle: "Sharpen Your Mind, Outshine the Rest!",
-    description:
-      "Test your skills and challenge yourself to reach new heights. This assessment pushes your analytical boundaries and highlights your core strengths.",
-    duration: "1 Hour",
-    venue: "CSA Hall",
-  },
-  {
-    day: "OCT",
-    month: "2026",
-    date: "2026-10-15",
-    title: "Ideathon",
-    tag: "Innovation Challenge",
-    subtitle: "From Thought to Impact!",
-    description:
-      "Ideate, innovate, and implement because your unique idea can truly change the world. Dive into an intense brainstorming arena where creativity meets execution.",
-    duration: "3 Hours",
-    venue: "Auditorium",
-  },
-  {
-    day: "NOV",
-    month: "2026",
-    date: "2026-11-15",
-    title: "E-Sport",
-    tag: "Gaming",
-    subtitle: "Game On, Glory Awaits!",
-    description:
-      "Compete fiercely, conquer the opposition, and claim your crown as the ultimate gaming champion. Bring your absolute A-game to the digital arena.",
-    duration: "3 Hours",
-    venue: "SAC",
-  },
-  {
-    day: "FEB",
-    month: "2027",
-    date: "2027-02-15",
-    title: "Treasure Hunt",
-    tag: "Adventure",
-    subtitle: "Decode the Clues, Uncover the Mystery!",
-    description:
-      "Solve intricate puzzles, explore hidden corners, and experience the thrill of the ultimate hunt. Gather your team and race against the clock.",
-    duration: "3 Hours",
-    venue: "REC Campus",
-  },
-  {
-    day: "-",
-    month: "",
-    date: "2027-02-15",
-    title: "Kaun Banega Genius (KBG)",
-    tag: "Intellectual Battle",
-    subtitle: "The Ultimate Battle of Wits!",
-    description:
-      "Think critically, answer smartly, and win big because everyone wants to know if you are the next genius. Step onto the grand stage of knowledge.",
-    duration: "2 Hours",
-    venue: "To Be Announced",
-  },
-];
+import { createClient } from "@/lib/supabase/client";
 
 type Filter = "all" | "upcoming" | "completed";
 
+type SupabaseEvent = {
+  id: string;
+  title: string;
+  date: string;
+  time: string;
+  location: string;
+  type: string;
+  description: string;
+  published: boolean;
+};
+
+type RegistrationPage = {
+  id: string;
+  event_id: string | null;
+  slug: string;
+  status: "draft" | "published" | "closed";
+};
+
 export default function EventsPage() {
-  const [activeFilter, setActiveFilter] = useState<Filter>("all");
+  const supabase = useMemo(() => createClient(), []);
+
+  const [activeFilter, setActiveFilter] =
+    useState<Filter>("all");
+
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    loadEvents();
+  }, []);
+
+  async function loadEvents() {
+    setLoading(true);
+    setError("");
+
+    const {
+      data: eventData,
+      error: eventError,
+    } = await supabase
+      .from("events")
+      .select(
+        "id, title, date, time, location, type, description, published"
+      )
+      .eq("published", true)
+      .order("date", {
+        ascending: true,
+      });
+
+    if (eventError) {
+      console.error("Public events error:", eventError);
+      setError("Unable to load events.");
+      setEvents([]);
+      setLoading(false);
+      return;
+    }
+
+    const {
+      data: registrationData,
+      error: registrationError,
+    } = await supabase
+      .from("registration_pages")
+      .select("id, event_id, slug, status")
+      .eq("status", "published");
+
+    if (registrationError) {
+      console.error(
+        "Registration pages error:",
+        registrationError
+      );
+    }
+
+    const registrations =
+      (registrationData ?? []) as RegistrationPage[];
+
+    const registrationMap = new Map<
+      string,
+      RegistrationPage
+    >();
+
+    registrations.forEach((registration) => {
+      if (registration.event_id) {
+        registrationMap.set(
+          registration.event_id,
+          registration
+        );
+      }
+    });
+
+    const mappedEvents: EventItem[] = (
+      (eventData ?? []) as SupabaseEvent[]
+    ).map((event) => {
+      const registration = registrationMap.get(event.id);
+
+      return {
+        id: event.id,
+
+        day: getDay(event.date),
+
+        month: getMonthAndYear(event.date),
+
+        date: event.date,
+
+        title: event.title,
+
+        tag: event.type,
+
+        subtitle: getSubtitle(event.description),
+
+        description: event.description,
+
+        /*
+         * IMPORTANT:
+         * Keep the database time as the actual `time`
+         * property so EventCard can display it.
+         */
+        time: event.time,
+
+        /*
+         * Keep duration available as well so no existing
+         * EventCard data structure is unnecessarily removed.
+         */
+        duration: event.time,
+
+        venue: event.location,
+
+        link: registration
+          ? `/events/${registration.slug}/register`
+          : undefined,
+      };
+    });
+
+    setEvents(mappedEvents);
+    setLoading(false);
+  }
 
   const today = new Date();
 
   const filteredEvents = events.filter((event) => {
-    // Events without a date stay visible under All Events.
     if (!event.date) {
       return activeFilter === "all";
     }
 
-    const eventDate = new Date(`${event.date}T23:59:59`);
+    const eventDate = parseEventDate(event.date);
+
+    if (!eventDate) {
+      return activeFilter === "all";
+    }
 
     if (activeFilter === "upcoming") {
       return eventDate >= today;
@@ -120,7 +184,7 @@ export default function EventsPage() {
           <img
             src="/images/calendar-3d.png"
             alt="3D calendar illustration"
-            className="h-48 w-48 -translate-x-0 -translate-y-8 object-contain md:h-72 md:w-72 md:-translate-y-10"
+            className="h-48 w-48 -translate-y-8 object-contain md:h-72 md:w-72 md:-translate-y-10"
           />
         </div>
 
@@ -141,6 +205,7 @@ export default function EventsPage() {
               size={15}
               className="text-emerald-500"
             />
+
             Stay Updated, Get Involved
           </span>
 
@@ -149,7 +214,8 @@ export default function EventsPage() {
           </h1>
 
           <p className="hero-description mt-5 text-lg leading-8 text-slate-500">
-            Discover, learn and grow with our exciting technical events.
+            Discover, learn and grow with our exciting
+            technical events.
           </p>
         </div>
       </section>
@@ -157,14 +223,25 @@ export default function EventsPage() {
       {/* Filters */}
       <div className="glass mb-7 flex flex-wrap gap-2 rounded-[24px] p-3">
         {[
-          { label: "All Events", value: "all" as Filter },
-          { label: "Upcoming", value: "upcoming" as Filter },
-          { label: "Completed", value: "completed" as Filter },
+          {
+            label: "All Events",
+            value: "all" as Filter,
+          },
+          {
+            label: "Upcoming",
+            value: "upcoming" as Filter,
+          },
+          {
+            label: "Completed",
+            value: "completed" as Filter,
+          },
         ].map((filter) => (
           <button
             key={filter.value}
             type="button"
-            onClick={() => setActiveFilter(filter.value)}
+            onClick={() =>
+              setActiveFilter(filter.value)
+            }
             className={
               activeFilter === filter.value
                 ? "btn-primary rounded-full px-4 py-2 text-sm font-bold"
@@ -178,10 +255,26 @@ export default function EventsPage() {
 
       {/* Events */}
       <div className="grid gap-4">
-        {filteredEvents.length > 0 ? (
+        {loading ? (
+          <div className="glass rounded-[28px] p-10 text-center">
+            <h3 className="text-xl font-extrabold">
+              Loading events...
+            </h3>
+          </div>
+        ) : error ? (
+          <div className="glass rounded-[28px] p-10 text-center">
+            <h3 className="text-xl font-extrabold">
+              Unable to load events
+            </h3>
+
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              Please try again later.
+            </p>
+          </div>
+        ) : filteredEvents.length > 0 ? (
           filteredEvents.map((event) => (
             <EventCard
-              key={event.title}
+              key={event.id}
               event={event}
             />
           ))
@@ -199,4 +292,72 @@ export default function EventsPage() {
       </div>
     </main>
   );
+}
+
+function parseEventDate(value: string) {
+  if (!value) {
+    return null;
+  }
+
+  // ISO date: 2026-09-15
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const parsed = new Date(`${value}T23:59:59`);
+
+    return Number.isNaN(parsed.getTime())
+      ? null
+      : parsed;
+  }
+
+  // Existing long date format:
+  // 28 September 2026
+  const parsed = new Date(value);
+
+  return Number.isNaN(parsed.getTime())
+    ? null
+    : parsed;
+}
+
+function getDay(value: string) {
+  const date = parseEventDate(value);
+
+  if (!date) {
+    return "-";
+  }
+
+  return date
+    .getDate()
+    .toString()
+    .padStart(2, "0");
+}
+
+function getMonthAndYear(value: string) {
+  const date = parseEventDate(value);
+
+  if (!date) {
+    return "";
+  }
+
+  const month = date
+    .toLocaleDateString("en-US", {
+      month: "short",
+    })
+    .toUpperCase();
+
+  const year = date.getFullYear();
+
+  return `${month} ${year}`;
+}
+
+function getSubtitle(description: string) {
+  if (!description) {
+    return "";
+  }
+
+  const firstSentence = description
+    .split(/[.!?]/)[0]
+    .trim();
+
+  return firstSentence
+    ? `${firstSentence}!`
+    : "";
 }

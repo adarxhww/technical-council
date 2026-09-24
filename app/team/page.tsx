@@ -1,105 +1,176 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-
 import { PersonCard } from "@/components/PersonCard";
 import { LeadershipCard } from "@/components/LeadershipCard";
-
 import {
-  Linkedin,
-  Mail,
   UsersRound,
-  Phone,
   ShieldCheck,
   GraduationCap,
   Zap,
   Code,
   Users,
 } from "lucide-react";
-
 import JoinModal from "@/components/JoinModal";
+import { createClient } from "@/lib/supabase/client";
 
-/* =========================================================
-   TEAM DATA
-   ========================================================= */
+type SectionKey =
+  | "institutional_leadership"
+  | "executive_body"
+  | "secretaries"
+  | "co_secretaries"
+  | "general_members";
 
-const institutionalLeadership = [
+type TeamMember = {
+  id: string;
+  name: string;
+  role: string;
+  team: string;
+  year: string;
+  email: string;
+  photo: string;
+  linkedin: string;
+  section: SectionKey;
+  published: boolean;
+  display_order: number;
+};
+
+type LeadershipMember = {
+  name: string;
+  role: string;
+  imageUrl: string;
+  linkedin?: string;
+  email?: string;
+  phone?: string;
+};
+
+const SECTION_CONFIG: {
+  key: SectionKey;
+  title: string;
+  subtitle: string;
+}[] = [
   {
-    name: "Prof. Dhananjay Singh",
-    role: "Director",
-    imageUrl: "/images/team/Director.jpg",
-    linkedin: "https://linkedin.com/in/dhananjay-singh-3415a624",
-    email: "director@recabn.ac.in",
+    key: "institutional_leadership",
+    title: "INSTITUTINAL LEADERSHIP",
+    subtitle: "Faculty Administration",
   },
   {
-    name: "Dr. Amit Kumar Pandey",
-    role: "Technical Council Convenor",
-    imageUrl: "/images/team/convenor1.jpg",
-    email: "amitkumarpandey@recabn.ac.in",
-    phone: "+91 8587079523",
+    key: "executive_body",
+    title: "EXECUTIVE BODY",
+    subtitle: "Final Year Core",
+  },
+  {
+    key: "secretaries",
+    title: "SECRETARIES",
+    subtitle: "Core Operations",
+  },
+  {
+    key: "co_secretaries",
+    title: "Co-Secretaries",
+    subtitle: "Technical Support",
+  },
+  {
+    key: "general_members",
+    title: "General Members",
+    subtitle: "Active Volunteers",
   },
 ];
 
-const executiveBody = [
-  {
-    name: "Amir Kareem",
-    role: "Head Secretary",
-    imageUrl: "",
-    linkedin: "https://linkedin.com/in/your-link-here",
-    email: "@example.com",
-  },
-  {
-    name: "Aakriti Tiwari",
-    role: "Head Secretary",
-    imageUrl: "",
-    linkedin: "https://linkedin.com/in/your-link-here",
-  },
-  {
-    name: "Ujjwal Tiwari",
-    role: "Senior Secretary",
-    imageUrl: "",
-    linkedin: "https://linkedin.com/in/your-link-here",
-    email: "ujjwal@example.com",
-  },
-];
+function getImageSource(photo: string) {
+  if (!photo) {
+    return "";
+  }
 
-const secretaries = [
-  ["Agam Pandey", "Research & Documentation", ""],
-  ["Priya Dubey", "Research & Documentation", ""],
-  ["Kartikeya Mishra", "Media & Design", ""],
-  ["Amrita Kumari", "Media & Design", ""],
-  ["Harsh Shukla", "Development", ""],
-  ["Sahil Singh", "Development", ""],
-  ["Pragti Shukla", "Development", ""],
-  ["Aditya Tripathi", "Management", ""],
-  ["Shivji Dubey", "Management", ""],
-  ["Shivangi", "Management", ""],
-  ["Nikhil Verma", "Finance", ""],
-  ["Bal Govind", "Finance", ""],
-  ["Priya Yadav", "Secretary", ""],
-  ["Kanishka Singh", "Secretary", ""],
-];
-
-const coSecretaries = [
-  ["Vaibhav Agrahari", "Research & Documentation", ""],
-  ["Ananya", "Research & Documentation", ""],
-  ["Sakshi Yadav", "Research & Documentation", ""],
-  ["Aman Verma", "Media & Design", ""],
-  ["Kabya Patel", "Media & Design", ""],
-  ["Anchal Shrivastava", "Media & Design", ""],
-  ["Anamika", "Media & Design", ""],
-  ["Adarsh Bhargav", "Development", ""],
-  ["Tammana Baroniya", "Development", ""],
-  ["Mohd. Zaid", "Development", ""],
-  ["Sunny Pandey", "Management", ""],
-  ["Devansh Dwivedi", "Management", ""],
-];
-
-const generalMembers: string[][] = [];
+  return photo;
+}
 
 export default function TeamPage() {
+  const supabase = useMemo(() => createClient(), []);
+
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+
+  useEffect(() => {
+    async function loadTeamMembers() {
+      const { data, error } = await supabase
+        .from("team_members")
+        .select(
+          `
+            id,
+            name,
+            role,
+            team,
+            year,
+            email,
+            photo,
+            linkedin,
+            section,
+            published,
+            display_order
+          `
+        )
+        .eq("published", true)
+        .order("section", { ascending: true })
+        .order("display_order", { ascending: true })
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        console.error("Failed to load team members:", error);
+        setMembers([]);
+        setLoading(false);
+        return;
+      }
+
+      setMembers((data ?? []) as TeamMember[]);
+      setLoading(false);
+    }
+
+    loadTeamMembers();
+  }, [supabase]);
+
+  const membersBySection = useMemo(() => {
+    const grouped: Record<SectionKey, TeamMember[]> = {
+      institutional_leadership: [],
+      executive_body: [],
+      secretaries: [],
+      co_secretaries: [],
+      general_members: [],
+    };
+
+    members.forEach((member) => {
+      if (grouped[member.section]) {
+        grouped[member.section].push(member);
+      }
+    });
+
+    return grouped;
+  }, [members]);
+
+  const institutionalLeadership =
+    membersBySection.institutional_leadership.map(
+      (member): LeadershipMember => ({
+        name: member.name,
+        role: member.role,
+        imageUrl: getImageSource(member.photo),
+        linkedin: member.linkedin || undefined,
+        email: member.email || undefined,
+      })
+    );
+
+  function renderPersonCard(member: TeamMember) {
+    return (
+      <PersonCard
+        key={member.id}
+        name={member.name}
+        role={member.role}
+        imageUrl={member.photo || undefined}
+        linkedin={member.linkedin || undefined}
+        email={member.email || undefined}
+      />
+    );
+  }
 
   return (
     <main className="container pb-20 pt-16">
@@ -109,6 +180,7 @@ export default function TeamPage() {
 
       <section className="relative mb-10 overflow-hidden rounded-[34px] p-7 md:p-12">
         <div className="blur-orb right-20 top-4 h-56 w-56 bg-blue-300" />
+
         <div className="blur-orb right-1/3 top-20 h-44 w-44 bg-emerald-300" />
 
         <div className="pointer-events-none absolute right-0 top-8 z-0 w-[380px] opacity-75 md:right-5 md:top-2 md:opacity-100">
@@ -124,188 +196,235 @@ export default function TeamPage() {
 
         <div className="relative z-10 max-w-2xl">
           <span className="team-badge mb-5 inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 text-xs font-bold soft-border">
-            <UsersRound size={15} className="text-emerald-500" />
+            <UsersRound
+              size={15}
+              className="text-emerald-500"
+            />
+
             Our People, Our Strength
           </span>
 
-          <h1 className="section-title">Our Team</h1>
+          <h1 className="section-title">
+            Our Team
+          </h1>
 
           <p className="team-hero-description mt-5 text-lg leading-8 text-slate-500">
-            Meet the passionate leaders and members driving innovation
-            forward.
+            Meet the passionate leaders and members driving
+            innovation forward.
           </p>
         </div>
       </section>
 
       {/* =====================================================
-          INSTITUTIONAL LEADERSHIP
+          LOADING
           ===================================================== */}
 
-      <section className="glass rounded-[30px] p-5 md:p-7">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-600">
-            <ShieldCheck size={20} />
-          </div>
+      {loading ? (
+        <div className="space-y-7">
+          {[1, 2, 3].map((item) => (
+            <section
+              key={item}
+              className="glass rounded-[30px] p-5 md:p-7"
+            >
+              <div className="mb-6 flex items-center gap-3">
+                <div className="h-10 w-10 animate-pulse rounded-lg bg-slate-200" />
 
-          <div>
-            <h2 className="text-2xl font-extrabold uppercase">
-              INSTITUTINAL LEADERSHIP
-            </h2>
+                <div>
+                  <div className="h-6 w-48 animate-pulse rounded bg-slate-200" />
 
-            <p className="mt-1 text-xs font-bold uppercase tracking-widest text-emerald-500">
-              Faculty Administration
-            </p>
-          </div>
-        </div>
+                  <div className="mt-2 h-3 w-32 animate-pulse rounded bg-slate-100" />
+                </div>
+              </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {institutionalLeadership.map((person) => (
-            <LeadershipCard key={person.name} {...person} />
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[1, 2, 3, 4].map((card) => (
+                  <div
+                    key={card}
+                    className="h-48 animate-pulse rounded-2xl bg-slate-100/70"
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
-      </section>
+      ) : (
+        <>
+          {/* =====================================================
+              INSTITUTIONAL LEADERSHIP
+              ===================================================== */}
 
-      {/* =====================================================
-          EXECUTIVE BODY
-          ===================================================== */}
+          <section className="glass rounded-[30px] p-5 md:p-7">
+            <div className="mb-6 flex items-center gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-600">
+                <ShieldCheck size={20} />
+              </div>
 
-      <section className="mt-7 glass rounded-[30px] p-5 md:p-7">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-600">
-            <GraduationCap size={20} />
-          </div>
+              <div>
+                <h2 className="text-2xl font-extrabold uppercase">
+                  INSTITUTINAL LEADERSHIP
+                </h2>
 
-          <div>
-            <h2 className="text-2xl font-extrabold uppercase">
-              EXECUTIVE BODY
-            </h2>
+                <p className="mt-1 text-xs font-bold uppercase tracking-widest text-emerald-500">
+                  Faculty Administration
+                </p>
+              </div>
+            </div>
 
-            <p className="mt-1 text-xs font-bold uppercase tracking-widest text-emerald-500">
-              Final Year Core
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {executiveBody.map((member, index) => (
-            <PersonCard
-              key={index}
-              name={member.name}
-              role={member.role}
-              imageUrl={member.imageUrl}
-              linkedin={member.linkedin}
-              email={member.email}
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* =====================================================
-          SECRETARIES
-          ===================================================== */}
-
-      <section className="mt-7 glass rounded-[30px] p-5 md:p-7">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-600">
-            <Zap size={20} />
-          </div>
-
-          <div>
-            <h2 className="text-2xl font-extrabold uppercase">
-              SECRETARIES
-            </h2>
-
-            <p className="mt-1 text-xs font-bold uppercase tracking-widest text-emerald-500">
-              Core Operations
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {secretaries.map(([name, role, imageUrl]) => (
-            <PersonCard
-              key={name}
-              name={name}
-              role={role}
-              imageUrl={imageUrl || undefined}
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* =====================================================
-          CO-SECRETARIES
-          ===================================================== */}
-
-      <section className="mt-7 glass rounded-[30px] p-5 md:p-7">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-600">
-            <Code size={20} />
-          </div>
-
-          <div>
-            <h2 className="text-2xl font-extrabold uppercase">
-              Co-Secretaries
-            </h2>
-
-            <p className="mt-1 text-xs font-bold uppercase tracking-widest text-blue-500">
-              Technical Support
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {coSecretaries.map(([name, role, imageUrl]) => (
-            <PersonCard
-              key={name}
-              name={name}
-              role={role}
-              imageUrl={imageUrl || undefined}
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* =====================================================
-          GENERAL MEMBERS
-          ===================================================== */}
-
-      <section className="mt-7 glass rounded-[30px] p-5 md:p-7">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-600">
-            <Users size={20} />
-          </div>
-
-          <div>
-            <h2 className="text-2xl font-extrabold uppercase">
-              General Members
-            </h2>
-
-            <p className="mt-1 text-xs font-bold uppercase tracking-widest text-indigo-500">
-              Active Volunteers
-            </p>
-          </div>
-        </div>
-
-        {generalMembers.length > 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {generalMembers.map(([name, role, imageUrl]) => (
-              <PersonCard
-                key={name}
-                name={name}
-                role={role}
-                imageUrl={imageUrl || undefined}
+            {institutionalLeadership.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {institutionalLeadership.map((person) => (
+                  <LeadershipCard
+                    key={person.name}
+                    {...person}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptySectionMessage
+                message="There are currently no institutional leaders published."
               />
-            ))}
-          </div>
-        ) : (
-          <div className="flex h-32 items-center justify-center rounded-2xl border-2 border-dashed border-slate-200/50 bg-slate-50/50">
-            <p className="text-sm font-medium text-slate-500">
-              There are currently no general members.
-            </p>
-          </div>
-        )}
-      </section>
+            )}
+          </section>
+
+          {/* =====================================================
+              EXECUTIVE BODY
+              ===================================================== */}
+
+          <section className="mt-7 glass rounded-[30px] p-5 md:p-7">
+            <div className="mb-6 flex items-center gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-600">
+                <GraduationCap size={20} />
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-extrabold uppercase">
+                  EXECUTIVE BODY
+                </h2>
+
+                <p className="mt-1 text-xs font-bold uppercase tracking-widest text-emerald-500">
+                  Final Year Core
+                </p>
+              </div>
+            </div>
+
+            {membersBySection.executive_body.length > 0 ? (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {membersBySection.executive_body.map(
+                  renderPersonCard
+                )}
+              </div>
+            ) : (
+              <EmptySectionMessage
+                message="There are currently no executive body members published."
+              />
+            )}
+          </section>
+
+          {/* =====================================================
+              SECRETARIES
+              ===================================================== */}
+
+          <section className="mt-7 glass rounded-[30px] p-5 md:p-7">
+            <div className="mb-6 flex items-center gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-600">
+                <Zap size={20} />
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-extrabold uppercase">
+                  SECRETARIES
+                </h2>
+
+                <p className="mt-1 text-xs font-bold uppercase tracking-widest text-emerald-500">
+                  Core Operations
+                </p>
+              </div>
+            </div>
+
+            {membersBySection.secretaries.length > 0 ? (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {membersBySection.secretaries.map(
+                  renderPersonCard
+                )}
+              </div>
+            ) : (
+              <EmptySectionMessage
+                message="There are currently no secretaries published."
+              />
+            )}
+          </section>
+
+          {/* =====================================================
+              CO-SECRETARIES
+              ===================================================== */}
+
+          <section className="mt-7 glass rounded-[30px] p-5 md:p-7">
+            <div className="mb-6 flex items-center gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-600">
+                <Code size={20} />
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-extrabold uppercase">
+                  Co-Secretaries
+                </h2>
+
+                <p className="mt-1 text-xs font-bold uppercase tracking-widest text-blue-500">
+                  Technical Support
+                </p>
+              </div>
+            </div>
+
+            {membersBySection.co_secretaries.length > 0 ? (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {membersBySection.co_secretaries.map(
+                  renderPersonCard
+                )}
+              </div>
+            ) : (
+              <EmptySectionMessage
+                message="There are currently no co-secretaries published."
+              />
+            )}
+          </section>
+
+          {/* =====================================================
+              GENERAL MEMBERS
+              ===================================================== */}
+
+          <section className="mt-7 glass rounded-[30px] p-5 md:p-7">
+            <div className="mb-6 flex items-center gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-600">
+                <Users size={20} />
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-extrabold uppercase">
+                  General Members
+                </h2>
+
+                <p className="mt-1 text-xs font-bold uppercase tracking-widest text-indigo-500">
+                  Active Volunteers
+                </p>
+              </div>
+            </div>
+
+            {membersBySection.general_members.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {membersBySection.general_members.map(
+                  renderPersonCard
+                )}
+              </div>
+            ) : (
+              <div className="flex h-32 items-center justify-center rounded-2xl border-2 border-dashed border-slate-200/50 bg-slate-50/50">
+                <p className="text-sm font-medium text-slate-500">
+                  There are currently no general members.
+                </p>
+              </div>
+            )}
+          </section>
+        </>
+      )}
 
       {/* =====================================================
           CTA
@@ -318,12 +437,11 @@ export default function TeamPage() {
           </h2>
 
           <p className="mt-2 text-sm text-slate-500">
-            We’re always looking for enthusiastic individuals to join us
-            and make an impact.
+            We’re always looking for enthusiastic individuals
+            to join us and make an impact.
           </p>
         </div>
 
-        {/* JOIN US BUTTON — OPENS EXISTING JOIN MODAL */}
         <button
           type="button"
           onClick={() => setIsJoinModalOpen(true)}
@@ -342,5 +460,19 @@ export default function TeamPage() {
         onClose={() => setIsJoinModalOpen(false)}
       />
     </main>
+  );
+}
+
+function EmptySectionMessage({
+  message,
+}: {
+  message: string;
+}) {
+  return (
+    <div className="flex h-32 items-center justify-center rounded-2xl border-2 border-dashed border-slate-200/50 bg-slate-50/50">
+      <p className="px-4 text-center text-sm font-medium text-slate-500">
+        {message}
+      </p>
+    </div>
   );
 }

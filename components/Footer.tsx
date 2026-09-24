@@ -80,7 +80,7 @@ export function Footer() {
 
     {/* LinkedIn */}
     <a
-      href="YOUR_LINKEDIN_URL"
+      href="https://www.linkedin.com/in/technicalcouncil-recabn"
       target="_blank"
       rel="noopener noreferrer"
       aria-label="LinkedIn"
@@ -91,7 +91,7 @@ export function Footer() {
 
     {/* GitHub */}
     <a
-      href="YOUR_GITHUB_URL"
+      href="https://github.com/Technical-Council"
       target="_blank"
       rel="noopener noreferrer"
       aria-label="GitHub"
