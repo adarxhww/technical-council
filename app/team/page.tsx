@@ -163,7 +163,7 @@ export default function TeamPage() {
 
         <div className="blur-orb right-1/3 top-20 h-44 w-44 bg-emerald-300" />
 
-        <div className="pointer-events-none absolute -right-30 top-8 z-0 w-[380px] opacity-75 md:right-5 md:top-2 md:opacity-100">
+        <div className="pointer-events-none absolute -right-36 top-16 z-0 w-[380px] opacity-75 md:right-5 md:top-2 md:opacity-100">
           <Image
             src="/images/teamx3d.png"
             alt="Our Team"
