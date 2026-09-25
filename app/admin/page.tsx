@@ -5,14 +5,15 @@ import {
   CalendarDays,
   ChevronRight,
   Clock3,
+  ExternalLink,
   ImagePlus,
   Loader2,
   MessageSquare,
   Plus,
+  RefreshCw,
   Users,
   X,
 } from "lucide-react";
-
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -44,12 +45,32 @@ type ActivityItem = {
   text: string;
   detail: string;
   time: string;
+  timestamp: string;
   type: "event" | "notice";
 };
 
 type AdminProfile = {
   name: string;
   email: string;
+};
+
+type NoticeOverview = {
+  published: number;
+  draft: number;
+  scheduled: number;
+  latest: {
+    title: string;
+    date: string;
+  } | null;
+};
+
+type TeamOverview = {
+  institutionalLeadership: number;
+  executiveBody: number;
+  secretaries: number;
+  coSecretaries: number;
+  generalMembers: number;
+  total: number;
 };
 
 const supabase = createClient();
@@ -88,6 +109,10 @@ const quickActions = [
 ];
 
 function parseEventDate(dateString: string) {
+  if (!dateString) {
+    return null;
+  }
+
   const parsed = new Date(dateString);
 
   if (!Number.isNaN(parsed.getTime())) {
@@ -174,11 +199,34 @@ function formatEventDate(dateString: string) {
   });
 }
 
+function formatShortDate(dateString: string) {
+  const date = parseEventDate(dateString);
+
+  if (!date) {
+    return dateString || "No date";
+  }
+
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 export default function AdminPage() {
   const [showQuickActions, setShowQuickActions] =
     useState(false);
 
+  const [showNotifications, setShowNotifications] =
+    useState(false);
+
   const [loading, setLoading] = useState(true);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [lastSynced, setLastSynced] = useState<Date | null>(
+    null
+  );
 
   const [stats, setStats] = useState<DashboardStats>({
     publishedNotices: 0,
@@ -187,28 +235,53 @@ export default function AdminPage() {
     unreadMessages: 0,
   });
 
-  const [upcomingEvents, setUpcomingEvents] =
-    useState<UpcomingEvent[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<
+    UpcomingEvent[]
+  >([]);
 
-  const [recentMessages, setRecentMessages] =
-    useState<RecentMessage[]>([]);
+  const [recentMessages, setRecentMessages] = useState<
+    RecentMessage[]
+  >([]);
 
-  const [activities, setActivities] =
-    useState<ActivityItem[]>([]);
+  const [activities, setActivities] = useState<
+    ActivityItem[]
+  >([]);
+
+  const [noticeOverview, setNoticeOverview] =
+    useState<NoticeOverview>({
+      published: 0,
+      draft: 0,
+      scheduled: 0,
+      latest: null,
+    });
+
+  const [teamOverview, setTeamOverview] =
+    useState<TeamOverview>({
+      institutionalLeadership: 0,
+      executiveBody: 0,
+      secretaries: 0,
+      coSecretaries: 0,
+      generalMembers: 0,
+      total: 0,
+    });
 
   const [admin, setAdmin] =
     useState<AdminProfile | null>(null);
 
   const [error, setError] = useState("");
 
-  async function loadDashboard() {
-    setLoading(true);
+  async function loadDashboard(
+    showRefreshLoader = false
+  ) {
+    if (showRefreshLoader) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
     setError("");
 
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
       /*
        * =====================================================
        * ADMIN PROFILE
@@ -233,20 +306,30 @@ export default function AdminPage() {
 
       /*
        * =====================================================
+       * TODAY
+       * =====================================================
+       */
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      /*
+       * =====================================================
        * NOTICES
        * =====================================================
        */
 
-      const { data: notices, error: noticesError } =
-        await supabase
-          .from("notices")
-          .select(
-            "id, title, date, description, published, created_at"
-          )
-          .eq("published", true)
-          .order("created_at", {
-            ascending: false,
-          });
+      const {
+        data: notices,
+        error: noticesError,
+      } = await supabase
+        .from("notices")
+        .select(
+          "id, title, date, description, published, created_at"
+        )
+        .order("created_at", {
+          ascending: false,
+        });
 
       if (noticesError) {
         console.error(
@@ -255,22 +338,70 @@ export default function AdminPage() {
         );
       }
 
+      const allNotices = notices ?? [];
+
+      let publishedNoticeCount = 0;
+      let draftNoticeCount = 0;
+      let scheduledNoticeCount = 0;
+
+      for (const notice of allNotices) {
+        if (!notice.published) {
+          draftNoticeCount += 1;
+          continue;
+        }
+
+        const noticeDate = notice.date
+          ? parseEventDate(notice.date)
+          : null;
+
+        if (
+          noticeDate &&
+          noticeDate.getTime() > today.getTime()
+        ) {
+          scheduledNoticeCount += 1;
+        } else {
+          publishedNoticeCount += 1;
+        }
+      }
+
+      const latestNotice = allNotices[0];
+
+      setNoticeOverview({
+        published: publishedNoticeCount,
+        draft: draftNoticeCount,
+        scheduled: scheduledNoticeCount,
+        latest: latestNotice
+          ? {
+              title:
+                latestNotice.title ||
+                "Untitled notice",
+              date: latestNotice.date
+                ? formatShortDate(
+                    latestNotice.date
+                  )
+                : "No date",
+            }
+          : null,
+      });
+
       /*
        * =====================================================
        * EVENTS
        * =====================================================
        */
 
-      const { data: events, error: eventsError } =
-        await supabase
-          .from("events")
-          .select(
-            "id, title, date, time, location, type, description, published, created_at"
-          )
-          .eq("published", true)
-          .order("created_at", {
-            ascending: false,
-          });
+      const {
+        data: events,
+        error: eventsError,
+      } = await supabase
+        .from("events")
+        .select(
+          "id, title, date, time, location, type, description, published, created_at"
+        )
+        .eq("published", true)
+        .order("created_at", {
+          ascending: false,
+        });
 
       if (eventsError) {
         console.error(
@@ -283,7 +414,9 @@ export default function AdminPage() {
 
       const upcoming = allEvents
         .filter((event) => {
-          const eventDate = parseEventDate(event.date);
+          const eventDate = parseEventDate(
+            event.date
+          );
 
           if (!eventDate) {
             return false;
@@ -301,7 +434,9 @@ export default function AdminPage() {
             return 0;
           }
 
-          return dateA.getTime() - dateB.getTime();
+          return (
+            dateA.getTime() - dateB.getTime()
+          );
         });
 
       setUpcomingEvents(
@@ -316,28 +451,60 @@ export default function AdminPage() {
 
       /*
        * =====================================================
-       * TEAM MEMBERS
+       * TC TEAM OVERVIEW
        * =====================================================
-       *
-       * The dashboard reads the actual team_members table.
-       * If the table is unavailable, the count safely falls
-       * back to zero rather than showing dummy data.
        */
 
-      const { count: teamCount, error: teamError } =
-        await supabase
-          .from("team_members")
-          .select("id", {
-            count: "exact",
-            head: true,
-          });
+      const {
+        data: teamMembers,
+        error: teamError,
+      } = await supabase
+        .from("tc_team")
+        .select("id, section")
+        .eq("published", true);
 
       if (teamError) {
         console.error(
-          "Dashboard team count error:",
+          "Dashboard TC team error:",
           teamError
         );
       }
+
+      const teamRows = teamMembers ?? [];
+
+      const teamBreakdown: TeamOverview = {
+        institutionalLeadership: teamRows.filter(
+          (member) =>
+            member.section ===
+            "institutional_leadership"
+        ).length,
+
+        executiveBody: teamRows.filter(
+          (member) =>
+            member.section ===
+            "executive_body"
+        ).length,
+
+        secretaries: teamRows.filter(
+          (member) =>
+            member.section === "secretaries"
+        ).length,
+
+        coSecretaries: teamRows.filter(
+          (member) =>
+            member.section === "co_secretaries"
+        ).length,
+
+        generalMembers: teamRows.filter(
+          (member) =>
+            member.section ===
+            "general_members"
+        ).length,
+
+        total: teamRows.length,
+      };
+
+      setTeamOverview(teamBreakdown);
 
       /*
        * =====================================================
@@ -392,57 +559,72 @@ export default function AdminPage() {
       setRecentMessages(
         (messages ?? []).map((message) => ({
           id: message.id,
-          name: message.name || "Unknown sender",
+          name:
+            message.name || "Unknown sender",
           subject:
             message.subject || "No subject",
           created_at: message.created_at,
-          unread: message.status === "unread",
+          unread:
+            message.status === "unread",
         }))
       );
 
       /*
        * =====================================================
-       * DASHBOARD STATS
+       * MAIN STATS
        * =====================================================
        */
 
       setStats({
-        publishedNotices: notices?.length ?? 0,
+        publishedNotices:
+          publishedNoticeCount +
+          scheduledNoticeCount,
+
         upcomingEvents: upcoming.length,
-        teamMembers: teamCount ?? 0,
-        unreadMessages: unreadMessageCount ?? 0,
+
+        teamMembers: teamBreakdown.total,
+
+        unreadMessages:
+          unreadMessageCount ?? 0,
       });
 
       /*
        * =====================================================
        * RECENT ACTIVITY
        * =====================================================
-       *
-       * There is currently no dedicated activity/audit table.
-       * Therefore we use real event + notice creation records
-       * instead of fabricated activity.
        */
 
-      const activityEvents: ActivityItem[] = allEvents
-        .filter((event) => event.created_at)
-        .map((event) => ({
-          id: `event-${event.id}`,
-          text: "Event updated",
-          detail: event.title,
-          time: formatRelativeTime(event.created_at),
-          type: "event",
-        }));
+      const activityEvents: ActivityItem[] =
+        allEvents
+          .filter(
+            (event) => event.created_at
+          )
+          .map((event) => ({
+            id: `event-${event.id}`,
+            text: "Event created",
+            detail: event.title,
+            time: formatRelativeTime(
+              event.created_at
+            ),
+            timestamp: event.created_at,
+            type: "event",
+          }));
 
       const activityNotices: ActivityItem[] =
-        (notices ?? [])
-          .filter((notice) => notice.created_at)
+        allNotices
+          .filter(
+            (notice) => notice.created_at
+          )
           .map((notice) => ({
             id: `notice-${notice.id}`,
-            text: "Notice published",
+            text: notice.published
+              ? "Notice published"
+              : "Notice drafted",
             detail: notice.title,
             time: formatRelativeTime(
               notice.created_at
             ),
+            timestamp: notice.created_at,
             type: "notice",
           }));
 
@@ -450,17 +632,26 @@ export default function AdminPage() {
         ...activityEvents,
         ...activityNotices,
       ]
-        .sort((a, b) => {
-          /*
-           * The activity text itself is already formatted,
-           * so preserve the source ordering by using the
-           * source arrays' newest-first ordering.
-           */
-          return 0;
-        })
+        .sort(
+          (a, b) =>
+            new Date(
+              b.timestamp
+            ).getTime() -
+            new Date(
+              a.timestamp
+            ).getTime()
+        )
         .slice(0, 4);
 
       setActivities(combinedActivities);
+
+      /*
+       * =====================================================
+       * LAST SYNCED
+       * =====================================================
+       */
+
+      setLastSynced(new Date());
     } catch (dashboardError) {
       console.error(
         "Dashboard loading error:",
@@ -472,17 +663,24 @@ export default function AdminPage() {
       );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }
+
+  /*
+   * =====================================================
+   * INITIAL LOAD + VISIBILITY REFRESH
+   * =====================================================
+   */
 
   useEffect(() => {
     loadDashboard();
 
-    /*
-     * Refresh dashboard when the admin returns to the tab.
-     */
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+      if (
+        document.visibilityState ===
+        "visible"
+      ) {
         loadDashboard();
       }
     };
@@ -502,13 +700,14 @@ export default function AdminPage() {
 
   /*
    * =====================================================
-   * REAL-TIME DASHBOARD UPDATES
+   * REAL-TIME UPDATES
    * =====================================================
    */
 
   useEffect(() => {
     const channel = supabase
       .channel("admin-dashboard-live")
+
       .on(
         "postgres_changes",
         {
@@ -520,6 +719,7 @@ export default function AdminPage() {
           loadDashboard();
         }
       )
+
       .on(
         "postgres_changes",
         {
@@ -531,6 +731,7 @@ export default function AdminPage() {
           loadDashboard();
         }
       )
+
       .on(
         "postgres_changes",
         {
@@ -542,17 +743,19 @@ export default function AdminPage() {
           loadDashboard();
         }
       )
+
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "team_members",
+          table: "tc_team",
         },
         () => {
           loadDashboard();
         }
       )
+
       .subscribe();
 
     return () => {
@@ -560,20 +763,74 @@ export default function AdminPage() {
     };
   }, []);
 
+  /*
+   * =====================================================
+   * CLOSE NOTIFICATION POPUP ON OUTSIDE CLICK
+   * =====================================================
+   */
+
+  useEffect(() => {
+    if (!showNotifications) {
+      return;
+    }
+
+    const handleDocumentClick = () => {
+      setShowNotifications(false);
+    };
+
+    document.addEventListener(
+      "click",
+      handleDocumentClick
+    );
+
+    return () => {
+      document.removeEventListener(
+        "click",
+        handleDocumentClick
+      );
+    };
+  }, [showNotifications]);
+
+  /*
+   * =====================================================
+   * HELPERS
+   * =====================================================
+   */
+
   const displayName =
-    admin?.name?.trim() || "Administrator";
+    admin?.name?.trim() ||
+    "Administrator";
 
   const displayEmail =
     admin?.email?.trim() || "Admin";
 
   const avatarLetter =
-    displayName.charAt(0).toUpperCase() || "A";
+    displayName
+      .charAt(0)
+      .toUpperCase() || "A";
+
+  const lastSyncedText = lastSynced
+    ? lastSynced.toLocaleTimeString(
+        "en-IN",
+        {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }
+      )
+    : "Not synced yet";
+
+  /*
+   * =====================================================
+   * RENDER
+   * =====================================================
+   */
 
   return (
     <div className="min-h-screen bg-[#f6f7fb] text-slate-900">
-      {/* =====================================================
+      {/* ===================================================
           HEADER
-      ===================================================== */}
+      =================================================== */}
 
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur-xl">
         <div className="flex h-20 items-center justify-between px-5 sm:px-8 lg:px-10">
@@ -588,17 +845,147 @@ export default function AdminPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              title="Notifications"
-              className="relative rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50"
-            >
-              <Bell size={19} />
+            {/* =================================================
+                NOTIFICATION BUTTON
+            ================================================= */}
 
-              {stats.unreadMessages > 0 && (
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" />
+            <div
+              className="relative"
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+            >
+              <button
+                type="button"
+                title="Notifications"
+                onClick={() =>
+                  setShowNotifications(
+                    (current) => !current
+                  )
+                }
+                className="relative rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50"
+              >
+                <Bell size={19} />
+
+                {stats.unreadMessages > 0 && (
+                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" />
+                )}
+              </button>
+
+              {/* =================================================
+                  NOTIFICATION POPUP
+              ================================================= */}
+
+              {showNotifications && (
+                <div className="absolute right-0 top-12 z-[80] w-[360px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
+                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-950">
+                        Recent Activity
+                      </h3>
+
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        Your latest dashboard updates
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowNotifications(
+                          false
+                        )
+                      }
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                      aria-label="Close notifications"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+
+                  <div className="max-h-[360px] overflow-y-auto">
+                    {activities.length === 0 ? (
+                      <div className="px-4 py-8 text-center">
+                        <Bell
+                          size={24}
+                          className="mx-auto text-slate-300"
+                        />
+
+                        <p className="mt-2 text-sm font-medium text-slate-600">
+                          No recent activity
+                        </p>
+                      </div>
+                    ) : (
+                      activities
+                        .slice(0, 4)
+                        .map(
+                          (activity) => (
+                            <button
+                              key={
+                                activity.id
+                              }
+                              type="button"
+                              onClick={() => {
+                                setShowNotifications(
+                                  false
+                                );
+
+                                if (
+                                  activity.type ===
+                                  "event"
+                                ) {
+                                  window.location.href =
+                                    "/admin/events";
+                                } else {
+                                  window.location.href =
+                                    "/admin/notices";
+                                }
+                              }}
+                              className="flex w-full gap-3 border-b border-slate-100 px-4 py-3.5 text-left transition last:border-b-0 hover:bg-slate-50"
+                            >
+                              <span
+                                className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${
+                                  activity.type ===
+                                  "event"
+                                    ? "bg-blue-600"
+                                    : "bg-emerald-500"
+                                }`}
+                              />
+
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {
+                                    activity.text
+                                  }
+                                </p>
+
+                                <p className="mt-0.5 truncate text-xs text-slate-500">
+                                  {
+                                    activity.detail
+                                  }
+                                </p>
+
+                                <p className="mt-1 text-[11px] text-slate-400">
+                                  {
+                                    activity.time
+                                  }
+                                </p>
+                              </div>
+
+                              <ChevronRight
+                                size={15}
+                                className="mt-1 shrink-0 text-slate-300"
+                              />
+                            </button>
+                          )
+                        )
+                    )}
+                  </div>
+
+                  
+                </div>
               )}
-            </button>
+            </div>
 
             <div className="hidden h-9 w-px bg-slate-200 sm:block" />
 
@@ -641,16 +1028,41 @@ export default function AdminPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() =>
-              setShowQuickActions(true)
-            }
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-emerald-600 hover:to-blue-700"
-          >
-            <Plus size={17} />
-            Quick Action
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              title="Refresh dashboard"
+              onClick={() =>
+                loadDashboard(true)
+              }
+              disabled={refreshing}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw
+                size={16}
+                className={
+                  refreshing
+                    ? "animate-spin"
+                    : ""
+                }
+              />
+
+              <span className="hidden sm:inline">
+                Refresh
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setShowQuickActions(true)
+              }
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-emerald-600 hover:to-blue-700"
+            >
+              <Plus size={17} />
+              Quick Action
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -660,42 +1072,59 @@ export default function AdminPage() {
         )}
 
         {/* ===================================================
-            STATS
+            MAIN STATS
         =================================================== */}
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
             {
               title: "Published Notices",
-              value: stats.publishedNotices,
+              value:
+                stats.publishedNotices,
               icon: Bell,
-              description: "Currently visible",
+              description:
+                "Published & scheduled",
+              href: "/admin/notices",
             },
             {
               title: "Upcoming Events",
-              value: stats.upcomingEvents,
+              value:
+                stats.upcomingEvents,
               icon: CalendarDays,
-              description: "Scheduled events",
+              description:
+                "Scheduled events",
+              href: "/admin/events",
             },
             {
               title: "Team Members",
-              value: stats.teamMembers,
+              value:
+                stats.teamMembers,
               icon: Users,
-              description: "Across all teams",
+              description:
+                "Council members",
+              href: "/admin/team",
             },
             {
               title: "Unread Messages",
-              value: stats.unreadMessages,
+              value:
+                stats.unreadMessages,
               icon: MessageSquare,
-              description: "Needs attention",
+              description:
+                "Needs attention",
+              href: "/admin/messages?status=unread",
             },
           ].map((stat) => {
             const Icon = stat.icon;
 
             return (
-              <div
+              <button
                 key={stat.title}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                type="button"
+                onClick={() => {
+                  window.location.href =
+                    stat.href;
+                }}
+                className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
               >
                 <div className="flex items-start justify-between">
                   <div>
@@ -705,12 +1134,10 @@ export default function AdminPage() {
 
                     <p className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
                       {loading ? (
-                        <span className="inline-flex">
-                          <Loader2
-                            size={27}
-                            className="animate-spin text-slate-300"
-                          />
-                        </span>
+                        <Loader2
+                          size={27}
+                          className="animate-spin text-slate-300"
+                        />
                       ) : (
                         stat.value
                       )}
@@ -725,7 +1152,7 @@ export default function AdminPage() {
                 <p className="mt-4 text-xs text-slate-400">
                   {stat.description}
                 </p>
-              </div>
+              </button>
             );
           })}
         </section>
@@ -770,7 +1197,8 @@ export default function AdminPage() {
                   />
                   Loading events...
                 </div>
-              ) : upcomingEvents.length === 0 ? (
+              ) : upcomingEvents.length ===
+                0 ? (
                 <div className="px-5 py-10 text-center">
                   <CalendarDays
                     size={28}
@@ -786,45 +1214,54 @@ export default function AdminPage() {
                   </p>
                 </div>
               ) : (
-                upcomingEvents.map((event) => (
-                  <div
-                    key={event.id}
-                    className="flex items-center gap-4 px-5 py-4"
-                  >
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-                      <CalendarDays size={18} />
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-900">
-                        {event.title}
-                      </p>
-
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                        <Clock3 size={13} />
-
-                        <span>
-                          {event.date}
-                        </span>
-
-                        <span>·</span>
-
-                        <span>
-                          {event.time}
-                        </span>
+                upcomingEvents.map(
+                  (event) => (
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => {
+                        window.location.href =
+                          "/admin/events";
+                      }}
+                      className="flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-slate-50"
+                    >
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+                        <CalendarDays
+                          size={18}
+                        />
                       </div>
-                    </div>
 
-                    <span className="hidden rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 sm:block">
-                      {event.status}
-                    </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-slate-900">
+                          {event.title}
+                        </p>
 
-                    <ChevronRight
-                      size={17}
-                      className="shrink-0 text-slate-400"
-                    />
-                  </div>
-                ))
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                          <Clock3 size={13} />
+
+                          <span>
+                            {event.date}
+                          </span>
+
+                          <span>·</span>
+
+                          <span>
+                            {event.time}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span className="hidden rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 sm:block">
+                        {event.status}
+                      </span>
+
+                      <ChevronRight
+                        size={17}
+                        className="shrink-0 text-slate-400"
+                      />
+                    </button>
+                  )
+                )
               )}
             </div>
           </div>
@@ -864,7 +1301,8 @@ export default function AdminPage() {
                   />
                   Loading messages...
                 </div>
-              ) : recentMessages.length === 0 ? (
+              ) : recentMessages.length ===
+                0 ? (
                 <div className="px-5 py-10 text-center">
                   <MessageSquare
                     size={28}
@@ -880,41 +1318,400 @@ export default function AdminPage() {
                   </p>
                 </div>
               ) : (
-                recentMessages.map((message) => (
-                  <div
-                    key={message.id}
-                    className="flex items-center gap-3 px-5 py-4"
+                recentMessages.map(
+                  (message) => (
+                    <button
+                      key={message.id}
+                      type="button"
+                      onClick={() => {
+                        window.location.href =
+                          "/admin/messages";
+                      }}
+                      className="flex w-full items-center gap-3 px-5 py-4 text-left transition hover:bg-slate-50"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
+                        {message.name
+                          .charAt(0)
+                          .toUpperCase()}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-semibold text-slate-900">
+                            {
+                              message.name
+                            }
+                          </p>
+
+                          {message.unread && (
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
+                          )}
+                        </div>
+
+                        <p className="truncate text-xs text-slate-500">
+                          {
+                            message.subject
+                          }
+                        </p>
+                      </div>
+
+                      <span className="shrink-0 text-[11px] text-slate-400">
+                        {formatRelativeTime(
+                          message.created_at
+                        )}
+                      </span>
+
+                      <ChevronRight
+                        size={15}
+                        className="shrink-0 text-slate-300"
+                      />
+                    </button>
+                  )
+                )
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* ===================================================
+            NOTICE OVERVIEW + TEAM OVERVIEW
+        =================================================== */}
+
+        <section className="mt-6 grid gap-6 xl:grid-cols-2">
+          {/* =================================================
+              NOTICE OVERVIEW
+          ================================================= */}
+
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5">
+              <div>
+                <h3 className="font-semibold text-slate-950">
+                  Notice Overview
+                </h3>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  Current website notice status
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href =
+                    "/admin/notices";
+                }}
+                className="text-sm font-semibold text-slate-700 transition hover:text-slate-950"
+              >
+                Manage
+              </button>
+            </div>
+
+            <div className="p-5">
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href =
+                      "/admin/notices";
+                  }}
+                  className="rounded-xl bg-emerald-50 p-4 text-left transition hover:bg-emerald-100"
+                >
+                  <p className="text-xs font-medium text-emerald-700">
+                    Published
+                  </p>
+
+                  <p className="mt-1 text-2xl font-bold text-emerald-900">
+                    {loading ? (
+                      <Loader2
+                        size={21}
+                        className="animate-spin"
+                      />
+                    ) : (
+                      noticeOverview.published
+                    )}
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href =
+                      "/admin/notices";
+                  }}
+                  className="rounded-xl bg-slate-100 p-4 text-left transition hover:bg-slate-200"
+                >
+                  <p className="text-xs font-medium text-slate-600">
+                    Draft
+                  </p>
+
+                  <p className="mt-1 text-2xl font-bold text-slate-900">
+                    {loading ? (
+                      <Loader2
+                        size={21}
+                        className="animate-spin"
+                      />
+                    ) : (
+                      noticeOverview.draft
+                    )}
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href =
+                      "/admin/notices";
+                  }}
+                  className="rounded-xl bg-blue-50 p-4 text-left transition hover:bg-blue-100"
+                >
+                  <p className="text-xs font-medium text-blue-700">
+                    Scheduled
+                  </p>
+
+                  <p className="mt-1 text-2xl font-bold text-blue-900">
+                    {loading ? (
+                      <Loader2
+                        size={21}
+                        className="animate-spin"
+                      />
+                    ) : (
+                      noticeOverview.scheduled
+                    )}
+                  </p>
+                </button>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  Latest Notice
+                </p>
+
+                {noticeOverview.latest ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href =
+                        "/admin/notices";
+                    }}
+                    className="mt-2 flex w-full items-center gap-3 text-left"
                   >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
-                      {message.name
-                        .charAt(0)
-                        .toUpperCase()}
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-slate-600 shadow-sm">
+                      <Bell size={16} />
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-slate-900">
-                          {message.name}
-                        </p>
+                      <p className="truncate text-sm font-semibold text-slate-800">
+                        {
+                          noticeOverview
+                            .latest
+                            .title
+                        }
+                      </p>
 
-                        {message.unread && (
-                          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
-                        )}
-                      </div>
-
-                      <p className="truncate text-xs text-slate-500">
-                        {message.subject}
+                      <p className="mt-0.5 text-xs text-slate-400">
+                        {
+                          noticeOverview
+                            .latest
+                            .date
+                        }
                       </p>
                     </div>
 
-                    <span className="shrink-0 text-[11px] text-slate-400">
-                      {formatRelativeTime(
-                        message.created_at
+                    <ChevronRight
+                      size={16}
+                      className="text-slate-300"
+                    />
+                  </button>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-400">
+                    No notices available.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* =================================================
+              TC TEAM OVERVIEW
+          ================================================= */}
+
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5">
+              <div>
+                <h3 className="font-semibold text-slate-950">
+                  TC Team Overview
+                </h3>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  Published Technical Council members
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href =
+                    "/admin/team";
+                }}
+                className="text-sm font-semibold text-slate-700 transition hover:text-slate-950"
+              >
+                Manage
+              </button>
+            </div>
+
+            <div className="p-5">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {[
+                  {
+                    label:
+                      "Institutional Leadership",
+                    value:
+                      teamOverview.institutionalLeadership,
+                  },
+                  {
+                    label: "Executive Body",
+                    value:
+                      teamOverview.executiveBody,
+                  },
+                  {
+                    label: "Secretaries",
+                    value:
+                      teamOverview.secretaries,
+                  },
+                  {
+                    label: "Co-Secretaries",
+                    value:
+                      teamOverview.coSecretaries,
+                  },
+                  {
+                    label: "General Members",
+                    value:
+                      teamOverview.generalMembers,
+                  },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      window.location.href =
+                        "/admin/team";
+                    }}
+                    className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 text-left transition hover:border-slate-200 hover:bg-slate-50"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm">
+                        <Users size={15} />
+                      </div>
+
+                      <span className="truncate text-xs font-medium text-slate-600">
+                        {item.label}
+                      </span>
+                    </div>
+
+                    <span className="ml-3 text-base font-bold text-slate-900">
+                      {loading ? (
+                        <Loader2
+                          size={17}
+                          className="animate-spin text-slate-300"
+                        />
+                      ) : (
+                        item.value
                       )}
                     </span>
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href =
+                    "/admin/team";
+                }}
+                className="mt-3 flex w-full items-center justify-between rounded-xl bg-slate-900 px-4 py-3 text-left text-white transition hover:bg-slate-800"
+              >
+                <div>
+                  <p className="text-xs font-medium text-slate-400">
+                    Total Published Members
+                  </p>
+
+                  <p className="mt-0.5 text-lg font-bold">
+                    {loading ? (
+                      <Loader2
+                        size={19}
+                        className="animate-spin"
+                      />
+                    ) : (
+                      teamOverview.total
+                    )}
+                  </p>
+                </div>
+
+                <ChevronRight size={17} />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ===================================================
+            WEBSITE STATUS
+        =================================================== */}
+
+        <section className="mt-6">
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                  <div className="relative">
+                    <div className="h-3 w-3 rounded-full bg-emerald-500" />
+
+                    <div className="absolute inset-0 animate-ping rounded-full bg-emerald-400 opacity-30" />
                   </div>
-                ))
-              )}
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-slate-950">
+                      Website Status
+                    </h3>
+
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                      Online
+                    </span>
+                  </div>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    Dashboard connected successfully to the website data.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="rounded-xl bg-slate-50 px-4 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    Last synced
+                  </p>
+
+                  <p className="mt-0.5 text-xs font-semibold text-slate-700">
+                    {lastSyncedText}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.open(
+                      "/",
+                      "_blank",
+                      "noopener,noreferrer"
+                    );
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Open Website
+                  <ExternalLink size={15} />
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -954,34 +1751,55 @@ export default function AdminPage() {
                 </p>
               </div>
             ) : (
-              activities.map((activity) => (
-                <div
-                  key={activity.id}
-                  className="flex gap-4 px-5 py-5"
-                >
-                  <div
-                    className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-                      activity.type === "event"
-                        ? "bg-blue-600"
-                        : "bg-emerald-500"
-                    }`}
-                  />
+              activities.map(
+                (activity) => (
+                  <button
+                    key={activity.id}
+                    type="button"
+                    onClick={() => {
+                      if (
+                        activity.type ===
+                        "event"
+                      ) {
+                        window.location.href =
+                          "/admin/events";
+                      } else {
+                        window.location.href =
+                          "/admin/notices";
+                      }
+                    }}
+                    className="flex w-full gap-4 px-5 py-5 text-left transition hover:bg-slate-50"
+                  >
+                    <div
+                      className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+                        activity.type ===
+                        "event"
+                          ? "bg-blue-600"
+                          : "bg-emerald-500"
+                      }`}
+                    />
 
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {activity.text}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {activity.text}
+                      </p>
 
-                    <p className="mt-1 text-sm text-slate-500">
-                      {activity.detail}
-                    </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {activity.detail}
+                      </p>
 
-                    <p className="mt-2 text-xs text-slate-400">
-                      {activity.time}
-                    </p>
-                  </div>
-                </div>
-              ))
+                      <p className="mt-2 text-xs text-slate-400">
+                        {activity.time}
+                      </p>
+                    </div>
+
+                    <ChevronRight
+                      size={16}
+                      className="mt-1 shrink-0 text-slate-300"
+                    />
+                  </button>
+                )
+              )
             )}
           </div>
         </section>
@@ -996,7 +1814,8 @@ export default function AdminPage() {
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/30 p-5 backdrop-blur-sm"
           onMouseDown={(event) => {
             if (
-              event.target === event.currentTarget
+              event.target ===
+              event.currentTarget
             ) {
               setShowQuickActions(false);
             }
@@ -1027,42 +1846,52 @@ export default function AdminPage() {
             </div>
 
             <div className="grid gap-3 p-5 sm:grid-cols-2">
-              {quickActions.map((action) => {
-                const Icon = action.icon;
+              {quickActions.map(
+                (action) => {
+                  const Icon = action.icon;
 
-                return (
-                  <button
-                    key={action.title}
-                    type="button"
-                    onClick={() => {
-                      window.location.href =
-                        action.href;
-                    }}
-                    className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/40 hover:shadow-sm"
-                  >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-blue-600 text-white shadow-sm transition group-hover:from-emerald-600 group-hover:to-blue-700">
-                      <Icon size={18} />
-                    </div>
+                  return (
+                    <button
+                      key={
+                        action.title
+                      }
+                      type="button"
+                      onClick={() => {
+                        window.location.href =
+                          action.href;
+                      }}
+                      className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/40 hover:shadow-sm"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-blue-600 text-white shadow-sm transition group-hover:from-emerald-600 group-hover:to-blue-700">
+                        <Icon size={18} />
+                      </div>
 
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-900">
-                        {action.title}
-                      </p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {
+                            action.title
+                          }
+                        </p>
 
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {action.description}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {
+                            action.description
+                          }
+                        </p>
+                      </div>
+                    </button>
+                  );
+                }
+              )}
             </div>
 
             <div className="flex justify-end border-t border-slate-100 bg-slate-50/60 px-5 py-4">
               <button
                 type="button"
                 onClick={() =>
-                  setShowQuickActions(false)
+                  setShowQuickActions(
+                    false
+                  )
                 }
                 className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-slate-950"
               >
