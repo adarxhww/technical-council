@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+
 import Image from "next/image";
+
 import { PersonCard } from "@/components/PersonCard";
 import { LeadershipCard } from "@/components/LeadershipCard";
+
 import {
   UsersRound,
   ShieldCheck,
@@ -12,6 +15,7 @@ import {
   Code,
   Users,
 } from "lucide-react";
+
 import JoinModal from "@/components/JoinModal";
 import { createClient } from "@/lib/supabase/client";
 
@@ -32,8 +36,10 @@ type TeamMember = {
   photo: string;
   linkedin: string;
   section: SectionKey;
+  contact_no?: string | null;
   published: boolean;
   display_order: number;
+  created_at?: string;
 };
 
 type LeadershipMember = {
@@ -44,38 +50,6 @@ type LeadershipMember = {
   email?: string;
   phone?: string;
 };
-
-const SECTION_CONFIG: {
-  key: SectionKey;
-  title: string;
-  subtitle: string;
-}[] = [
-  {
-    key: "institutional_leadership",
-    title: "INSTITUTINAL LEADERSHIP",
-    subtitle: "Faculty Administration",
-  },
-  {
-    key: "executive_body",
-    title: "EXECUTIVE BODY",
-    subtitle: "Final Year Core",
-  },
-  {
-    key: "secretaries",
-    title: "SECRETARIES",
-    subtitle: "Core Operations",
-  },
-  {
-    key: "co_secretaries",
-    title: "Co-Secretaries",
-    subtitle: "Technical Support",
-  },
-  {
-    key: "general_members",
-    title: "General Members",
-    subtitle: "Active Volunteers",
-  },
-];
 
 function getImageSource(photo: string) {
   if (!photo) {
@@ -95,7 +69,7 @@ export default function TeamPage() {
   useEffect(() => {
     async function loadTeamMembers() {
       const { data, error } = await supabase
-        .from("team_members")
+        .from("tc_team")
         .select(
           `
             id,
@@ -107,8 +81,10 @@ export default function TeamPage() {
             photo,
             linkedin,
             section,
+            contact_no,
             published,
-            display_order
+            display_order,
+            created_at
           `
         )
         .eq("published", true)
@@ -117,7 +93,7 @@ export default function TeamPage() {
         .order("created_at", { ascending: true });
 
       if (error) {
-        console.error("Failed to load team members:", error);
+        console.error("Failed to load Technical Council team:", error);
         setMembers([]);
         setLoading(false);
         return;
@@ -156,6 +132,10 @@ export default function TeamPage() {
         imageUrl: getImageSource(member.photo),
         linkedin: member.linkedin || undefined,
         email: member.email || undefined,
+
+        // Phone number is intentionally supplied only for
+        // Institutional Leadership.
+        phone: member.contact_no || undefined,
       })
     );
 
@@ -189,28 +169,22 @@ export default function TeamPage() {
             alt="Our Team"
             width={600}
             height={450}
-            className="h-auto w-[70%] object-contain -translate-y-4 translate-x-32 md:w-full md:translate-x-0 md:translate-y-0"
+            className="h-auto w-[70%] -translate-x-0 translate-y-0 object-contain md:w-full"
             priority
           />
         </div>
 
         <div className="relative z-10 max-w-2xl">
           <span className="team-badge mb-5 inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 text-xs font-bold soft-border">
-            <UsersRound
-              size={15}
-              className="text-emerald-500"
-            />
-
+            <UsersRound size={15} className="text-emerald-500" />
             Our People, Our Strength
           </span>
 
-          <h1 className="section-title">
-            Our Team
-          </h1>
+          <h1 className="section-title">Our Team</h1>
 
           <p className="team-hero-description mt-5 text-lg leading-8 text-slate-500">
-            Meet the passionate leaders and members driving
-            innovation forward.
+            Meet the passionate leaders and members driving innovation
+            forward.
           </p>
         </div>
       </section>
@@ -231,7 +205,6 @@ export default function TeamPage() {
 
                 <div>
                   <div className="h-6 w-48 animate-pulse rounded bg-slate-200" />
-
                   <div className="mt-2 h-3 w-32 animate-pulse rounded bg-slate-100" />
                 </div>
               </div>
@@ -261,7 +234,7 @@ export default function TeamPage() {
 
               <div>
                 <h2 className="text-2xl font-extrabold uppercase">
-                  INSTITUTINAL LEADERSHIP
+                  INSTITUTIONAL LEADERSHIP
                 </h2>
 
                 <p className="mt-1 text-xs font-bold uppercase tracking-widest text-emerald-500">
@@ -273,16 +246,11 @@ export default function TeamPage() {
             {institutionalLeadership.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 {institutionalLeadership.map((person) => (
-                  <LeadershipCard
-                    key={person.name}
-                    {...person}
-                  />
+                  <LeadershipCard key={person.name} {...person} />
                 ))}
               </div>
             ) : (
-              <EmptySectionMessage
-                message="There are currently no institutional leaders published."
-              />
+              <EmptySectionMessage message="There are currently no institutional leaders published." />
             )}
           </section>
 
@@ -309,14 +277,10 @@ export default function TeamPage() {
 
             {membersBySection.executive_body.length > 0 ? (
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {membersBySection.executive_body.map(
-                  renderPersonCard
-                )}
+                {membersBySection.executive_body.map(renderPersonCard)}
               </div>
             ) : (
-              <EmptySectionMessage
-                message="There are currently no executive body members published."
-              />
+              <EmptySectionMessage message="There are currently no executive body members published." />
             )}
           </section>
 
@@ -343,14 +307,10 @@ export default function TeamPage() {
 
             {membersBySection.secretaries.length > 0 ? (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                {membersBySection.secretaries.map(
-                  renderPersonCard
-                )}
+                {membersBySection.secretaries.map(renderPersonCard)}
               </div>
             ) : (
-              <EmptySectionMessage
-                message="There are currently no secretaries published."
-              />
+              <EmptySectionMessage message="There are currently no secretaries published." />
             )}
           </section>
 
@@ -377,14 +337,10 @@ export default function TeamPage() {
 
             {membersBySection.co_secretaries.length > 0 ? (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                {membersBySection.co_secretaries.map(
-                  renderPersonCard
-                )}
+                {membersBySection.co_secretaries.map(renderPersonCard)}
               </div>
             ) : (
-              <EmptySectionMessage
-                message="There are currently no co-secretaries published."
-              />
+              <EmptySectionMessage message="There are currently no co-secretaries published." />
             )}
           </section>
 
@@ -411,16 +367,10 @@ export default function TeamPage() {
 
             {membersBySection.general_members.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                {membersBySection.general_members.map(
-                  renderPersonCard
-                )}
+                {membersBySection.general_members.map(renderPersonCard)}
               </div>
             ) : (
-              <div className="flex h-32 items-center justify-center rounded-2xl border-2 border-dashed border-slate-200/50 bg-slate-50/50">
-                <p className="text-sm font-medium text-slate-500">
-                  There are currently no general members.
-                </p>
-              </div>
+              <EmptySectionMessage message="There are currently no general members." />
             )}
           </section>
         </>
@@ -437,8 +387,8 @@ export default function TeamPage() {
           </h2>
 
           <p className="mt-2 text-sm text-slate-500">
-            We’re always looking for enthusiastic individuals
-            to join us and make an impact.
+            We’re always looking for enthusiastic individuals to join us and
+            make an impact.
           </p>
         </div>
 
@@ -463,11 +413,7 @@ export default function TeamPage() {
   );
 }
 
-function EmptySectionMessage({
-  message,
-}: {
-  message: string;
-}) {
+function EmptySectionMessage({ message }: { message: string }) {
   return (
     <div className="flex h-32 items-center justify-center rounded-2xl border-2 border-dashed border-slate-200/50 bg-slate-50/50">
       <p className="px-4 text-center text-sm font-medium text-slate-500">

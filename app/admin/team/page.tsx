@@ -36,10 +36,9 @@ type TeamMember = {
   photo: string;
   linkedin: string;
   section: SectionKey;
+  contact_no?: string | null;
   published: boolean;
   display_order: number;
-  team_registration_id?: string | null;
-  member_number?: number | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -52,6 +51,7 @@ type MemberForm = {
   email: string;
   photo: string;
   linkedin: string;
+  contact_no: string;
   section: SectionKey;
   published: boolean;
 };
@@ -123,23 +123,22 @@ const EMPTY_FORM: MemberForm = {
   email: "",
   photo: "",
   linkedin: "",
+  contact_no: "",
   section: "general_members",
   published: false,
 };
 
 function getSectionLabel(section: SectionKey) {
   return (
-    SECTION_OPTIONS.find(
-      (item) => item.value === section
-    )?.label ?? "General Members"
+    SECTION_OPTIONS.find((item) => item.value === section)?.label ??
+    "General Members"
   );
 }
 
 function getSectionSubtitle(section: SectionKey) {
   return (
-    SECTION_OPTIONS.find(
-      (item) => item.value === section
-    )?.subtitle ?? "Active Volunteers"
+    SECTION_OPTIONS.find((item) => item.value === section)?.subtitle ??
+    "Active Volunteers"
   );
 }
 
@@ -164,10 +163,7 @@ function normalizeLinkedIn(value: string) {
     return `https://${trimmed}`;
   }
 
-  return `https://linkedin.com/in/${trimmed.replace(
-    /^\/+/,
-    ""
-  )}`;
+  return `https://linkedin.com/in/${trimmed.replace(/^\/+/, "")}`;
 }
 
 function isValidEmail(email: string) {
@@ -175,9 +171,7 @@ function isValidEmail(email: string) {
     return true;
   }
 
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-    email.trim()
-  );
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
 export default function AdminTeamPage() {
@@ -193,57 +187,51 @@ export default function AdminTeamPage() {
     "all" | SectionKey
   >("all");
 
-  const [publishedFilter, setPublishedFilter] =
-    useState<"all" | "published" | "draft">("all");
+  const [publishedFilter, setPublishedFilter] = useState<
+    "all" | "published" | "draft"
+  >("all");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [editingMember, setEditingMember] =
     useState<TeamMember | null>(null);
 
-  const [form, setForm] = useState<MemberForm>(
-    EMPTY_FORM
-  );
+  const [form, setForm] = useState<MemberForm>(EMPTY_FORM);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const fileInputRef =
-    useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function loadMembers() {
     setLoading(true);
     setError("");
 
-    const { data, error: fetchError } =
-      await supabase
-        .from("team_members")
-        .select(
-          `
-            id,
-            name,
-            role,
-            team,
-            year,
-            email,
-            photo,
-            linkedin,
-            section,
-            published,
-            display_order,
-            team_registration_id,
-            member_number,
-            created_at,
-            updated_at
-          `
-        )
-        .order("section", { ascending: true })
-        .order("display_order", { ascending: true })
-        .order("created_at", { ascending: true });
+    const { data, error: fetchError } = await supabase
+      .from("tc_team")
+      .select(`
+        id,
+        name,
+        role,
+        team,
+        year,
+        email,
+        photo,
+        linkedin,
+        section,
+        contact_no,
+        published,
+        display_order,
+        created_at,
+        updated_at
+      `)
+      .order("section", { ascending: true })
+      .order("display_order", { ascending: true })
+      .order("created_at", { ascending: true });
 
     if (fetchError) {
       console.error(
-        "Failed to load team members:",
+        "Failed to load Technical Council team members:",
         fetchError
       );
 
@@ -271,7 +259,10 @@ export default function AdminTeamPage() {
         member.role.toLowerCase().includes(query) ||
         member.team.toLowerCase().includes(query) ||
         member.year.toLowerCase().includes(query) ||
-        member.email.toLowerCase().includes(query);
+        member.email.toLowerCase().includes(query) ||
+        (member.contact_no ?? "")
+          .toLowerCase()
+          .includes(query);
 
       const matchesSection =
         sectionFilter === "all" ||
@@ -341,6 +332,7 @@ export default function AdminTeamPage() {
       email: member.email ?? "",
       photo: member.photo ?? "",
       linkedin: member.linkedin ?? "",
+      contact_no: member.contact_no ?? "",
       section:
         member.section ?? "general_members",
       published: Boolean(member.published),
@@ -410,7 +402,6 @@ export default function AdminTeamPage() {
     };
 
     reader.readAsDataURL(file);
-
     event.target.value = "";
   }
 
@@ -423,9 +414,8 @@ export default function AdminTeamPage() {
     const team = form.team.trim();
     const year = form.year.trim();
     const email = form.email.trim();
-    const linkedin = normalizeLinkedIn(
-      form.linkedin
-    );
+    const linkedin = normalizeLinkedIn(form.linkedin);
+    const contactNo = form.contact_no.trim();
 
     if (!name) {
       setError("Name is required.");
@@ -446,23 +436,6 @@ export default function AdminTeamPage() {
 
     setSaving(true);
 
-    /*
-     * IMPORTANT
-     *
-     * team_registration_id and member_number are
-     * registration-system fields.
-     *
-     * A normal Technical Council member does not
-     * belong to a registration team, so both values
-     * are explicitly NULL when creating a normal
-     * Team-page member.
-     *
-     * During UPDATE we intentionally DO NOT include
-     * either field. This prevents editing a Team-page
-     * member from accidentally destroying existing
-     * registration relationships.
-     */
-
     const basePayload = {
       name,
       role,
@@ -472,39 +445,44 @@ export default function AdminTeamPage() {
       photo: form.photo,
       linkedin,
       section: form.section,
+
+      // Contact number is only applicable
+      // to Institutional Leadership.
+      contact_no:
+        form.section === "institutional_leadership"
+          ? contactNo || null
+          : null,
+
       published: form.published,
     };
 
     if (editingMember) {
       const { data, error: updateError } =
         await supabase
-          .from("team_members")
+          .from("tc_team")
           .update(basePayload)
           .eq("id", editingMember.id)
-          .select(
-            `
-              id,
-              name,
-              role,
-              team,
-              year,
-              email,
-              photo,
-              linkedin,
-              section,
-              published,
-              display_order,
-              team_registration_id,
-              member_number,
-              created_at,
-              updated_at
-            `
-          )
+          .select(`
+            id,
+            name,
+            role,
+            team,
+            year,
+            email,
+            photo,
+            linkedin,
+            section,
+            contact_no,
+            published,
+            display_order,
+            created_at,
+            updated_at
+          `)
           .single();
 
       if (updateError) {
         console.error(
-          "Failed to update team member:",
+          "Failed to update Technical Council team member:",
           updateError
         );
 
@@ -542,44 +520,34 @@ export default function AdminTeamPage() {
 
       const insertPayload = {
         ...basePayload,
-
-        /*
-         * Registration-only fields.
-         */
-        team_registration_id: null,
-        member_number: null,
-
         display_order: nextDisplayOrder,
       };
 
       const { data, error: insertError } =
         await supabase
-          .from("team_members")
+          .from("tc_team")
           .insert(insertPayload)
-          .select(
-            `
-              id,
-              name,
-              role,
-              team,
-              year,
-              email,
-              photo,
-              linkedin,
-              section,
-              published,
-              display_order,
-              team_registration_id,
-              member_number,
-              created_at,
-              updated_at
-            `
-          )
+          .select(`
+            id,
+            name,
+            role,
+            team,
+            year,
+            email,
+            photo,
+            linkedin,
+            section,
+            contact_no,
+            published,
+            display_order,
+            created_at,
+            updated_at
+          `)
           .single();
 
       if (insertError) {
         console.error(
-          "Failed to create team member:",
+          "Failed to create Technical Council team member:",
           insertError
         );
 
@@ -618,30 +586,27 @@ export default function AdminTeamPage() {
 
     const { data, error: updateError } =
       await supabase
-        .from("team_members")
+        .from("tc_team")
         .update({
           published: nextPublished,
         })
         .eq("id", member.id)
-        .select(
-          `
-            id,
-            name,
-            role,
-            team,
-            year,
-            email,
-            photo,
-            linkedin,
-            section,
-            published,
-            display_order,
-            team_registration_id,
-            member_number,
-            created_at,
-            updated_at
-          `
-        )
+        .select(`
+          id,
+          name,
+          role,
+          team,
+          year,
+          email,
+          photo,
+          linkedin,
+          section,
+          contact_no,
+          published,
+          display_order,
+          created_at,
+          updated_at
+        `)
         .single();
 
     if (updateError) {
@@ -687,7 +652,7 @@ export default function AdminTeamPage() {
 
     const { error: deleteError } =
       await supabase
-        .from("team_members")
+        .from("tc_team")
         .delete()
         .eq("id", member.id);
 
@@ -759,7 +724,7 @@ export default function AdminTeamPage() {
     setError("");
 
     const firstUpdate = await supabase
-      .from("team_members")
+      .from("tc_team")
       .update({
         display_order: targetOrder,
       })
@@ -771,7 +736,7 @@ export default function AdminTeamPage() {
     }
 
     const secondUpdate = await supabase
-      .from("team_members")
+      .from("tc_team")
       .update({
         display_order: currentOrder,
       })
@@ -789,6 +754,7 @@ export default function AdminTeamPage() {
   return (
     <div className="min-h-screen px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto w-full max-w-[1500px]">
+
         {/* HEADER */}
         <div className="mb-8">
           <div className="mb-4">
@@ -1096,11 +1062,7 @@ export default function AdminTeamPage() {
                       <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-400">
                         Role
                       </th>
-
-                      <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-400">
-                        Team
-                      </th>
-
+                   
                       <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-400">
                         Year
                       </th>
@@ -1116,272 +1078,113 @@ export default function AdminTeamPage() {
                   </thead>
 
                   <tbody className="divide-y divide-slate-100">
-                    {filteredMembers.map(
-                      (member) => (
-                        <tr
-                          key={member.id}
-                          className="transition hover:bg-slate-50/70"
-                        >
-                          <td className="px-5 py-4">
-                            <div className="flex items-center gap-3">
-                              {member.photo ? (
-                                <img
-                                  src={member.photo}
-                                  alt={member.name}
-                                  className="h-11 w-11 rounded-xl object-cover ring-1 ring-slate-200"
-                                />
-                              ) : (
-                                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-100 to-blue-100 text-sm font-bold text-slate-700">
-                                  {member.name
-                                    .trim()
-                                    .charAt(0)
-                                    .toUpperCase() ||
-                                    "?"}
-                                </div>
+                    {filteredMembers.map((member) => (
+                      <tr
+                        key={member.id}
+                        className="transition hover:bg-slate-50/70"
+                      >
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            {member.photo ? (
+                              <img
+                                src={member.photo}
+                                alt={member.name}
+                                className="h-11 w-11 rounded-xl object-cover ring-1 ring-slate-200"
+                              />
+                            ) : (
+                              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-100 to-blue-100 text-sm font-bold text-slate-700">
+                                {member.name
+                                  .trim()
+                                  .charAt(0)
+                                  .toUpperCase() ||
+                                  "?"}
+                              </div>
+                            )}
+
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-slate-900">
+                                {member.name}
+                              </p>
+
+                              {member.email && (
+                                <p className="mt-0.5 truncate text-xs text-slate-500">
+                                  {member.email}
+                                </p>
                               )}
 
-                              <div className="min-w-0">
-                                <p className="truncate font-semibold text-slate-900">
-                                  {member.name}
-                                </p>
-
-                                {member.email && (
-                                  <p className="mt-0.5 truncate text-xs text-slate-500">
-                                    {member.email}
+                              {member.section ===
+                                "institutional_leadership" &&
+                                member.contact_no && (
+                                  <p className="mt-0.5 truncate text-xs text-slate-400">
+                                    {member.contact_no}
                                   </p>
                                 )}
-                              </div>
                             </div>
-                          </td>
+                          </div>
+                        </td>
 
-                          <td className="px-5 py-4">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-800">
-                                {getSectionLabel(
-                                  member.section
-                                )}
-                              </p>
+                        <td className="px-5 py-4">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">
+                              {getSectionLabel(
+                                member.section
+                              )}
+                            </p>
 
-                              <p className="mt-0.5 text-xs text-slate-400">
-                                {getSectionSubtitle(
-                                  member.section
-                                )}
-                              </p>
-                            </div>
-                          </td>
+                            <p className="mt-0.5 text-xs text-slate-400">
+                              {getSectionSubtitle(
+                                member.section
+                              )}
+                            </p>
+                          </div>
+                        </td>
 
-                          <td className="px-5 py-4">
-                            <span className="text-sm font-medium text-slate-700">
-                              {member.role || "—"}
-                            </span>
-                          </td>
+                        <td className="px-5 py-4">
+                          <span className="text-sm font-medium text-slate-700">
+                            {member.role || "—"}
+                          </span>
+                        </td>
 
-                          <td className="px-5 py-4">
-                            <span className="text-sm text-slate-600">
-                              {member.team || "—"}
-                            </span>
-                          </td>
+                        <td className="px-5 py-4">
+                          <span className="text-sm text-slate-600">
+                            {member.team || "—"}
+                          </span>
+                        </td>
 
-                          <td className="px-5 py-4">
-                            <span className="text-sm text-slate-600">
-                              {member.year || "—"}
-                            </span>
-                          </td>
+                        <td className="px-5 py-4">
+                          <span className="text-sm text-slate-600">
+                            {member.year || "—"}
+                          </span>
+                        </td>
 
-                          <td className="px-5 py-4">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                togglePublished(
-                                  member
-                                )
-                              }
-                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${
+                        <td className="px-5 py-4">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              togglePublished(member)
+                            }
+                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${
+                              member.published
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${
                                 member.published
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : "bg-slate-100 text-slate-500"
+                                  ? "bg-emerald-500"
+                                  : "bg-slate-400"
                               }`}
-                            >
-                              <span
-                                className={`h-1.5 w-1.5 rounded-full ${
-                                  member.published
-                                    ? "bg-emerald-500"
-                                    : "bg-slate-400"
-                                }`}
-                              />
+                            />
 
-                              {member.published
-                                ? "Published"
-                                : "Hidden"}
-                            </button>
-                          </td>
+                            {member.published
+                              ? "Published"
+                              : "Hidden"}
+                          </button>
+                        </td>
 
-                          <td className="px-5 py-4">
-                            <div className="flex items-center justify-end gap-1">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  moveMember(
-                                    member,
-                                    "up"
-                                  )
-                                }
-                                title="Move up"
-                                className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                              >
-                                ↑
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  moveMember(
-                                    member,
-                                    "down"
-                                  )
-                                }
-                                title="Move down"
-                                className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                              >
-                                ↓
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  openEditModal(
-                                    member
-                                  )
-                                }
-                                title="Edit"
-                                className="rounded-lg p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-600"
-                              >
-                                <Pencil size={17} />
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  deleteMember(
-                                    member
-                                  )
-                                }
-                                title="Delete"
-                                className="rounded-lg p-2 text-slate-500 transition hover:bg-red-50 hover:text-red-600"
-                              >
-                                <Trash2 size={17} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* MOBILE */}
-              <div className="divide-y divide-slate-100 lg:hidden">
-                {filteredMembers.map(
-                  (member) => (
-                    <div
-                      key={member.id}
-                      className="p-5"
-                    >
-                      <div className="flex items-start gap-3">
-                        {member.photo ? (
-                          <img
-                            src={member.photo}
-                            alt={member.name}
-                            className="h-12 w-12 shrink-0 rounded-xl object-cover ring-1 ring-slate-200"
-                          />
-                        ) : (
-                          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-100 to-blue-100 font-bold text-slate-700">
-                            {member.name
-                              .trim()
-                              .charAt(0)
-                              .toUpperCase() ||
-                              "?"}
-                          </div>
-                        )}
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                              <h3 className="font-bold text-slate-900">
-                                {member.name}
-                              </h3>
-
-                              <p className="mt-1 text-sm text-slate-500">
-                                {member.role ||
-                                  "No role"}
-                              </p>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                togglePublished(
-                                  member
-                                )
-                              }
-                              className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-                                member.published
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              {member.published
-                                ? "Published"
-                                : "Hidden"}
-                            </button>
-                          </div>
-
-                          <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-                            <div>
-                              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                                Section
-                              </span>
-
-                              <p className="mt-1 font-medium text-slate-700">
-                                {getSectionLabel(
-                                  member.section
-                                )}
-                              </p>
-                            </div>
-
-                            <div>
-                              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                                Team
-                              </span>
-
-                              <p className="mt-1 text-slate-600">
-                                {member.team || "—"}
-                              </p>
-                            </div>
-
-                            <div>
-                              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                                Year
-                              </span>
-
-                              <p className="mt-1 text-slate-600">
-                                {member.year || "—"}
-                              </p>
-                            </div>
-
-                            <div>
-                              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                                Email
-                              </span>
-
-                              <p className="mt-1 break-all text-slate-600">
-                                {member.email || "—"}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="mt-4 flex flex-wrap gap-2">
+                        <td className="px-5 py-4">
+                          <div className="flex items-center justify-end gap-1">
                             <button
                               type="button"
                               onClick={() =>
@@ -1390,9 +1193,10 @@ export default function AdminTeamPage() {
                                   "up"
                                 )
                               }
-                              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                              title="Move up"
+                              className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                             >
-                              ↑ Move Up
+                              ↑
                             </button>
 
                             <button
@@ -1403,42 +1207,206 @@ export default function AdminTeamPage() {
                                   "down"
                                 )
                               }
-                              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                              title="Move down"
+                              className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                             >
-                              ↓ Move Down
+                              ↓
                             </button>
 
                             <button
                               type="button"
                               onClick={() =>
-                                openEditModal(
-                                  member
-                                )
+                                openEditModal(member)
                               }
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                              title="Edit"
+                              className="rounded-lg p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-600"
                             >
-                              <Pencil size={14} />
-                              Edit
+                              <Pencil size={17} />
                             </button>
 
                             <button
                               type="button"
                               onClick={() =>
-                                deleteMember(
-                                  member
-                                )
+                                deleteMember(member)
                               }
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
+                              title="Delete"
+                              className="rounded-lg p-2 text-slate-500 transition hover:bg-red-50 hover:text-red-600"
                             >
-                              <Trash2 size={14} />
-                              Delete
+                              <Trash2 size={17} />
                             </button>
                           </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* MOBILE */}
+              <div className="divide-y divide-slate-100 lg:hidden">
+                {filteredMembers.map((member) => (
+                  <div
+                    key={member.id}
+                    className="p-5"
+                  >
+                    <div className="flex items-start gap-3">
+                      {member.photo ? (
+                        <img
+                          src={member.photo}
+                          alt={member.name}
+                          className="h-12 w-12 shrink-0 rounded-xl object-cover ring-1 ring-slate-200"
+                        />
+                      ) : (
+                        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-100 to-blue-100 font-bold text-slate-700">
+                          {member.name
+                            .trim()
+                            .charAt(0)
+                            .toUpperCase() ||
+                            "?"}
+                        </div>
+                      )}
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <h3 className="font-bold text-slate-900">
+                              {member.name}
+                            </h3>
+
+                            <p className="mt-1 text-sm text-slate-500">
+                              {member.role ||
+                                "No role"}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              togglePublished(member)
+                            }
+                            className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+                              member.published
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {member.published
+                              ? "Published"
+                              : "Hidden"}
+                          </button>
+                        </div>
+
+                        <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+                          <div>
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                              Section
+                            </span>
+
+                            <p className="mt-1 font-medium text-slate-700">
+                              {getSectionLabel(
+                                member.section
+                              )}
+                            </p>
+                          </div>
+
+                          <div>
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                              Team
+                            </span>
+
+                            <p className="mt-1 text-slate-600">
+                              {member.team || "—"}
+                            </p>
+                          </div>
+
+                          <div>
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                              Year
+                            </span>
+
+                            <p className="mt-1 text-slate-600">
+                              {member.year || "—"}
+                            </p>
+                          </div>
+
+                          <div>
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                              Email
+                            </span>
+
+                            <p className="mt-1 break-all text-slate-600">
+                              {member.email || "—"}
+                            </p>
+                          </div>
+
+                          {member.section ===
+                            "institutional_leadership" && (
+                            <div>
+                              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                                Contact No.
+                              </span>
+
+                              <p className="mt-1 text-slate-600">
+                                {member.contact_no ||
+                                  "—"}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              moveMember(
+                                member,
+                                "up"
+                              )
+                            }
+                            className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                          >
+                            ↑ Move Up
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              moveMember(
+                                member,
+                                "down"
+                              )
+                            }
+                            className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                          >
+                            ↓ Move Down
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openEditModal(member)
+                            }
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                          >
+                            <Pencil size={14} />
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              deleteMember(member)
+                            }
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
+                          >
+                            <Trash2 size={14} />
+                            Delete
+                          </button>
                         </div>
                       </div>
                     </div>
-                  )
-                )}
+                  </div>
+                ))}
               </div>
             </>
           )}
@@ -1458,6 +1426,7 @@ export default function AdminTeamPage() {
           }}
         >
           <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+
             {/* MODAL HEADER */}
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
               <div>
@@ -1493,6 +1462,7 @@ export default function AdminTeamPage() {
               )}
 
               <div className="grid gap-5 md:grid-cols-2">
+
                 {/* NAME */}
                 <div className="md:col-span-2">
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
@@ -1568,16 +1538,14 @@ export default function AdminTeamPage() {
                       Select role
                     </option>
 
-                    {ROLE_OPTIONS.map(
-                      (role) => (
-                        <option
-                          key={role}
-                          value={role}
-                        >
-                          {role}
-                        </option>
-                      )
-                    )}
+                    {ROLE_OPTIONS.map((role) => (
+                      <option
+                        key={role}
+                        value={role}
+                      >
+                        {role}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -1601,16 +1569,14 @@ export default function AdminTeamPage() {
                       Select team
                     </option>
 
-                    {TEAM_OPTIONS.map(
-                      (team) => (
-                        <option
-                          key={team}
-                          value={team}
-                        >
-                          {team}
-                        </option>
-                      )
-                    )}
+                    {TEAM_OPTIONS.map((team) => (
+                      <option
+                        key={team}
+                        value={team}
+                      >
+                        {team}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -1634,16 +1600,14 @@ export default function AdminTeamPage() {
                       Select year
                     </option>
 
-                    {YEAR_OPTIONS.map(
-                      (year) => (
-                        <option
-                          key={year}
-                          value={year}
-                        >
-                          {year}
-                        </option>
-                      )
-                    )}
+                    {YEAR_OPTIONS.map((year) => (
+                      <option
+                        key={year}
+                        value={year}
+                      >
+                        {year}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -1673,6 +1637,30 @@ export default function AdminTeamPage() {
                     />
                   </div>
                 </div>
+
+                {/* CONTACT NO. — INSTITUTIONAL LEADERSHIP ONLY */}
+                {form.section ===
+                  "institutional_leadership" && (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      Contact No.
+                    </label>
+
+                    <input
+                      type="tel"
+                      value={form.contact_no}
+                      onChange={(event) =>
+                        updateForm(
+                          "contact_no",
+                          event.target.value
+                        )
+                      }
+                      placeholder="+91 XXXXX XXXXX"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    />
+                    
+                  </div>
+                )}
 
                 {/* LINKEDIN */}
                 <div className="md:col-span-2">
