@@ -370,15 +370,15 @@ export default function JoinModal({
             />
           </div>
 
-          {/* CV / Resume */}
+         {/* CV / Resume */}
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">
-              CV / Resume{" "}
+    CV / Resume{" "}
             </label>
 
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-4 transition hover:border-blue-300 hover:bg-blue-50/30">
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-4 transition hover:border-blue-300 hover:bg-blue-50/30 dark:border-slate-700 dark:bg-black dark:hover:bg-black">
               <div className="flex items-start gap-3">
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-slate-500 shadow-sm">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-50 text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-300">
                   <FileText size={18} />
                 </div>
 
@@ -388,15 +388,15 @@ export default function JoinModal({
                     name="resume"
                     accept=".pdf,application/pdf"
                     onChange={handleResumeChange}
-                    className="block w-full cursor-pointer text-sm text-slate-500
+                    className="block w-full cursor-pointer text-sm text-slate-500 dark:text-slate-300
                       file:mr-4 file:rounded-xl file:border-0
                       file:bg-slate-950 file:px-4 file:py-2.5
                       file:text-xs file:font-semibold file:text-white
                       hover:file:bg-slate-800"
-                  />
+        />
 
                   {resumeName ? (
-                    <p className="mt-2 truncate text-xs font-medium text-slate-600">
+                    <p className="mt-2 truncate text-xs font-medium text-slate-600 dark:text-slate-300">
                       Selected: {resumeName}
                     </p>
                   ) : (
