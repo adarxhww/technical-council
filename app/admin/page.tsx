@@ -3,41 +3,88 @@
 import {
   Bell,
   CalendarDays,
+  CheckCircle2,
   ChevronRight,
   Clock3,
   ExternalLink,
+  FileText,
   ImagePlus,
   Loader2,
   MessageSquare,
   Plus,
   RefreshCw,
+  Sparkles,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+
+import Link from "next/link";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+
 import { createClient } from "@/lib/supabase/client";
 
-type DashboardStats = {
-  publishedNotices: number;
-  upcomingEvents: number;
-  teamMembers: number;
-  unreadMessages: number;
+const supabase = createClient();
+
+type NoticeRow = {
+  id: string;
+  title: string;
+  date: string;
+  description: string;
+  published: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type EventRow = {
+  id: string;
+  title: string;
+  date: string;
+  time: string | null;
+  created_at: string;
+};
+
+type TeamRow = {
+  id: string;
+  section: string;
+};
+
+type MessageRow = {
+  id: string;
+  name: string;
+  subject: string;
+  status: string;
+  created_at: string;
+};
+
+type RecruitmentApplicationRow = {
+  id: string;
+  full_name: string;
+  created_at: string;
+};
+
+type RegistrationRow = {
+  id: string;
+  registration_page_id: string;
+  created_at: string;
+};
+
+type RegistrationPageRow = {
+  id: string;
+  event_name: string;
+};
+
+type AdminProfile = {
+  name: string;
+  email: string;
 };
 
 type UpcomingEvent = {
   id: string;
   title: string;
   date: string;
-  time: string;
-  status: string;
-};
-
-type RecentMessage = {
-  id: string;
-  name: string;
-  subject: string;
-  created_at: string;
-  unread: boolean;
+  time: string | null;
 };
 
 type ActivityItem = {
@@ -49,15 +96,18 @@ type ActivityItem = {
   type: "event" | "notice";
 };
 
-type AdminProfile = {
-  name: string;
-  email: string;
+type NotificationItem = {
+  id: string;
+  text: string;
+  detail: string;
+  time: string;
+  timestamp: string;
+  type: "notice" | "message" | "application" | "registration";
 };
 
 type NoticeOverview = {
   published: number;
-  draft: number;
-  scheduled: number;
+  hidden: number;
   latest: {
     title: string;
     date: string;
@@ -73,85 +123,62 @@ type TeamOverview = {
   total: number;
 };
 
-const supabase = createClient();
+type DashboardStats = {
+  publishedNotices: number;
+  upcomingEvents: number;
+  teamMembers: number;
+  unreadMessages: number;
+};
 
-const quickActions = [
-  {
-    title: "Create Event",
-    description: "Add a new council event",
-    icon: CalendarDays,
-    href: "/admin/events",
-  },
-  {
-    title: "Add Team Member",
-    description: "Add someone to the council team",
-    icon: Users,
-    href: "/admin/team",
-  },
-  {
-    title: "Add Gallery Photo",
-    description: "Upload a new gallery item",
-    icon: ImagePlus,
-    href: "/admin/gallery",
-  },
-  {
-    title: "Publish Notice",
-    description: "Create a new website notice",
-    icon: Bell,
-    href: "/admin/notices",
-  },
-  {
-    title: "View Messages",
-    description: "Check contact messages",
-    icon: MessageSquare,
-    href: "/admin/messages",
-  },
-];
+function parseDateOnly(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
-function parseEventDate(dateString: string) {
-  if (!dateString) {
-    return null;
-  }
+  if (match) {
+    const [, year, month, day] = match;
 
-  const parsed = new Date(dateString);
-
-  if (!Number.isNaN(parsed.getTime())) {
-    return parsed;
-  }
-
-  const parts = dateString.trim().split(/\s+/);
-
-  if (parts.length >= 3) {
-    const day = Number(parts[0]);
-    const month = parts[1];
-    const year = Number(parts[2]);
-
-    const fallback = new Date(
-      `${month} ${day}, ${year}`
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day)
     );
-
-    if (!Number.isNaN(fallback.getTime())) {
-      return fallback;
-    }
   }
 
-  return null;
+  const parsed = new Date(value);
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function formatRelativeTime(dateString: string) {
-  const date = new Date(dateString);
+function formatEventDate(value: string) {
+  const date = parseDateOnly(value);
+
+  if (!date) return value;
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatShortDate(value: string) {
+  const date = parseDateOnly(value);
+
+  if (!date) return value;
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+  }).format(date);
+}
+
+function formatRelativeTime(value: string) {
+  const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
     return "Recently";
   }
 
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-
-  if (diff < 0) {
-    return "Upcoming";
-  }
-
+  const diff = Date.now() - date.getTime();
   const minutes = Math.floor(diff / 60000);
 
   if (minutes < 1) {
@@ -159,13 +186,13 @@ function formatRelativeTime(dateString: string) {
   }
 
   if (minutes < 60) {
-    return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+    return `${minutes} min ago`;
   }
 
   const hours = Math.floor(minutes / 60);
 
   if (hours < 24) {
-    return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+    return `${hours} hr ago`;
   }
 
   const days = Math.floor(hours / 24);
@@ -178,55 +205,26 @@ function formatRelativeTime(dateString: string) {
     return `${days} days ago`;
   }
 
-  return date.toLocaleDateString("en-IN", {
-    day: "numeric",
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
     month: "short",
-    year: "numeric",
-  });
+  }).format(date);
 }
 
-function formatEventDate(dateString: string) {
-  const date = parseEventDate(dateString);
-
-  if (!date) {
-    return dateString;
-  }
-
-  return date.toLocaleDateString("en-IN", {
+function getTodayLabel() {
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
-  });
+  }).format(new Date());
 }
 
-function formatShortDate(dateString: string) {
-  const date = parseEventDate(dateString);
-
-  if (!date) {
-    return dateString || "No date";
-  }
-
-  return date.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-export default function AdminPage() {
-  const [showQuickActions, setShowQuickActions] =
-    useState(false);
-
-  const [showNotifications, setShowNotifications] =
-    useState(false);
-
+export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
-
   const [refreshing, setRefreshing] = useState(false);
-
-  const [lastSynced, setLastSynced] = useState<Date | null>(
-    null
-  );
+  const [error, setError] = useState("");
+  const [admin, setAdmin] = useState<AdminProfile | null>(null);
 
   const [stats, setStats] = useState<DashboardStats>({
     publishedNotices: 0,
@@ -240,18 +238,19 @@ export default function AdminPage() {
   >([]);
 
   const [recentMessages, setRecentMessages] = useState<
-    RecentMessage[]
+    MessageRow[]
   >([]);
 
-  const [activities, setActivities] = useState<
-    ActivityItem[]
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+
+  const [notifications, setNotifications] = useState<
+    NotificationItem[]
   >([]);
 
   const [noticeOverview, setNoticeOverview] =
     useState<NoticeOverview>({
       published: 0,
-      draft: 0,
-      scheduled: 0,
+      hidden: 0,
       latest: null,
     });
 
@@ -265,449 +264,618 @@ export default function AdminPage() {
       total: 0,
     });
 
-  const [admin, setAdmin] =
-    useState<AdminProfile | null>(null);
+  const [lastSynced, setLastSynced] =
+    useState<Date | null>(null);
 
-  const [error, setError] = useState("");
+  const [showQuickActions, setShowQuickActions] =
+    useState(false);
 
-  async function loadDashboard(
-    showRefreshLoader = false
-  ) {
-    if (showRefreshLoader) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
+  const [showNotifications, setShowNotifications] =
+    useState(false);
 
-    setError("");
-
-    try {
-      /*
-       * =====================================================
-       * ADMIN PROFILE
-       * =====================================================
-       */
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        const { data: profile } = await supabase
-          .from("admin_profiles")
-          .select("name, email")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        if (profile) {
-          setAdmin(profile);
-        }
-      }
-
-      /*
-       * =====================================================
-       * TODAY
-       * =====================================================
-       */
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      /*
-       * =====================================================
-       * NOTICES
-       * =====================================================
-       */
-
-      const {
-        data: notices,
-        error: noticesError,
-      } = await supabase
-        .from("notices")
-        .select(
-          "id, title, date, description, published, created_at"
-        )
-        .order("created_at", {
-          ascending: false,
-        });
-
-      if (noticesError) {
-        console.error(
-          "Dashboard notices error:",
-          noticesError
-        );
-      }
-
-      const allNotices = notices ?? [];
-
-      let publishedNoticeCount = 0;
-      let draftNoticeCount = 0;
-      let scheduledNoticeCount = 0;
-
-      for (const notice of allNotices) {
-        if (!notice.published) {
-          draftNoticeCount += 1;
-          continue;
-        }
-
-        const noticeDate = notice.date
-          ? parseEventDate(notice.date)
-          : null;
-
-        if (
-          noticeDate &&
-          noticeDate.getTime() > today.getTime()
-        ) {
-          scheduledNoticeCount += 1;
+  const loadDashboard = useCallback(
+    async (manualRefresh = false) => {
+      try {
+        if (manualRefresh) {
+          setRefreshing(true);
         } else {
-          publishedNoticeCount += 1;
+          setLoading(true);
         }
-      }
 
-      const latestNotice = allNotices[0];
+        setError("");
 
-      setNoticeOverview({
-        published: publishedNoticeCount,
-        draft: draftNoticeCount,
-        scheduled: scheduledNoticeCount,
-        latest: latestNotice
-          ? {
-              title:
-                latestNotice.title ||
-                "Untitled notice",
-              date: latestNotice.date
-                ? formatShortDate(
-                    latestNotice.date
-                  )
-                : "No date",
-            }
-          : null,
-      });
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
 
-      /*
-       * =====================================================
-       * EVENTS
-       * =====================================================
-       */
+        if (userError) {
+          throw userError;
+        }
 
-      const {
-        data: events,
-        error: eventsError,
-      } = await supabase
-        .from("events")
-        .select(
-          "id, title, date, time, location, type, description, published, created_at"
-        )
-        .eq("published", true)
-        .order("created_at", {
-          ascending: false,
+        const profilePromise = user
+          ? supabase
+              .from("admin_profiles")
+              .select("name, email")
+              .eq("id", user.id)
+              .maybeSingle()
+          : Promise.resolve({
+              data: null,
+              error: null,
+            });
+
+        const [
+          profileResult,
+          noticesResult,
+          eventsResult,
+          teamResult,
+          unreadResult,
+          messagesResult,
+          applicationsResult,
+          individualRegistrationsResult,
+          teamRegistrationsResult,
+        ] = await Promise.all([
+          profilePromise,
+
+          // Notices
+          supabase
+            .from("notices")
+            .select(
+              "id, title, date, description, published, created_at, updated_at"
+            )
+            .order("created_at", {
+              ascending: false,
+            }),
+
+          // Published events
+          supabase
+            .from("events")
+            .select(
+              "id, title, date, time, created_at"
+            )
+            .eq("published", true)
+            .order("created_at", {
+              ascending: false,
+            }),
+
+          // Published team
+          supabase
+            .from("tc_team")
+            .select("id, section")
+            .eq("published", true),
+
+          // Unread messages count
+          supabase
+            .from("contact_messages")
+            .select("id", {
+              count: "exact",
+              head: true,
+            })
+            .eq("status", "unread"),
+
+          // Latest messages
+          supabase
+            .from("contact_messages")
+            .select(
+              "id, name, subject, status, created_at"
+            )
+            .order("created_at", {
+              ascending: false,
+            })
+            .limit(4),
+
+          // Latest recruitment applications
+          supabase
+            .from("recruitment_applications")
+            .select(
+              "id, full_name, created_at"
+            )
+            .order("created_at", {
+              ascending: false,
+            })
+            .limit(4),
+
+          // Latest individual registrations
+          supabase
+            .from("individual_registrations")
+            .select(
+              "id, registration_page_id, created_at"
+            )
+            .order("created_at", {
+              ascending: false,
+            })
+            .limit(4),
+
+          // Latest team registrations
+          supabase
+            .from("team_registrations")
+            .select(
+              "id, registration_page_id, created_at"
+            )
+            .order("created_at", {
+              ascending: false,
+            })
+            .limit(4),
+        ]);
+
+        const errors: string[] = [];
+
+        if (profileResult.error) {
+          errors.push("profile");
+        }
+
+        if (noticesResult.error) {
+          errors.push("notices");
+        }
+
+        if (eventsResult.error) {
+          errors.push("events");
+        }
+
+        if (teamResult.error) {
+          errors.push("team");
+        }
+
+        if (unreadResult.error) {
+          errors.push("messages");
+        }
+
+        if (messagesResult.error) {
+          errors.push("recent messages");
+        }
+
+        if (applicationsResult.error) {
+          errors.push("recruitment applications");
+        }
+
+        if (individualRegistrationsResult.error) {
+          errors.push("individual registrations");
+        }
+
+        if (teamRegistrationsResult.error) {
+          errors.push("team registrations");
+        }
+
+        if (profileResult.data) {
+          setAdmin(
+            profileResult.data as AdminProfile
+          );
+        }
+
+        const allNotices =
+          (noticesResult.data ?? []) as NoticeRow[];
+
+        const allEvents =
+          (eventsResult.data ?? []) as EventRow[];
+
+        const allTeamMembers =
+          (teamResult.data ?? []) as TeamRow[];
+
+        const allMessages =
+          (messagesResult.data ?? []) as MessageRow[];
+
+        const applications =
+          (applicationsResult.data ??
+            []) as RecruitmentApplicationRow[];
+
+        const individualRegistrations =
+          (individualRegistrationsResult.data ??
+            []) as RegistrationRow[];
+
+        const teamRegistrations =
+          (teamRegistrationsResult.data ??
+            []) as RegistrationRow[];
+
+        /*
+         * ----------------------------------------------------
+         * Registration page names
+         * ----------------------------------------------------
+         */
+
+        const registrationPageIds = Array.from(
+          new Set(
+            [
+              ...individualRegistrations,
+              ...teamRegistrations,
+            ].map(
+              (registration) =>
+                registration.registration_page_id
+            )
+          )
+        );
+
+        let registrationPages: RegistrationPageRow[] =
+          [];
+
+        if (registrationPageIds.length > 0) {
+          const registrationPagesResult =
+            await supabase
+              .from("registration_pages")
+              .select("id, event_name")
+              .in(
+                "id",
+                registrationPageIds
+              );
+
+          if (registrationPagesResult.error) {
+            errors.push(
+              "registration pages"
+            );
+          } else {
+            registrationPages =
+              (registrationPagesResult.data ??
+                []) as RegistrationPageRow[];
+          }
+        }
+
+        const registrationPageMap =
+          new Map<string, string>();
+
+        for (const page of registrationPages) {
+          registrationPageMap.set(
+            page.id,
+            page.event_name
+          );
+        }
+
+        /*
+         * ----------------------------------------------------
+         * Dashboard statistics
+         * ----------------------------------------------------
+         */
+
+        const publishedNoticeCount =
+          allNotices.filter(
+            (notice) =>
+              notice.published === true
+          ).length;
+
+        const hiddenNoticeCount =
+          allNotices.filter(
+            (notice) =>
+              notice.published === false
+          ).length;
+
+        const today = new Date();
+
+        today.setHours(
+          0,
+          0,
+          0,
+          0
+        );
+
+        const upcoming = allEvents
+          .filter((event) => {
+            const eventDate =
+              parseDateOnly(event.date);
+
+            return eventDate
+              ? eventDate >= today
+              : false;
+          })
+          .sort((a, b) => {
+            const first =
+              parseDateOnly(
+                a.date
+              )?.getTime() ?? 0;
+
+            const second =
+              parseDateOnly(
+                b.date
+              )?.getTime() ?? 0;
+
+            return first - second;
+          })
+          .slice(0, 4);
+
+        const latestNotice =
+          allNotices[0];
+
+        /*
+         * ----------------------------------------------------
+         * Team section counts
+         * ----------------------------------------------------
+         */
+
+        const sectionCounts = {
+          institutionalLeadership: 0,
+          executiveBody: 0,
+          secretaries: 0,
+          coSecretaries: 0,
+          generalMembers: 0,
+        };
+
+        for (const member of allTeamMembers) {
+          switch (member.section) {
+            case "institutional_leadership":
+              sectionCounts.institutionalLeadership++;
+              break;
+
+            case "executive_body":
+              sectionCounts.executiveBody++;
+              break;
+
+            case "secretaries":
+              sectionCounts.secretaries++;
+              break;
+
+            case "co_secretaries":
+              sectionCounts.coSecretaries++;
+              break;
+
+            case "general_members":
+              sectionCounts.generalMembers++;
+              break;
+
+            default:
+              break;
+          }
+        }
+
+        /*
+         * ----------------------------------------------------
+         * EXISTING RECENT ACTIVITY
+         * ----------------------------------------------------
+         */
+
+        const activityItems: ActivityItem[] = [
+          ...allEvents
+            .slice(0, 3)
+            .map((event) => ({
+              id: `event-${event.id}`,
+              text: "Event published",
+              detail: event.title,
+              time: formatRelativeTime(
+                event.created_at
+              ),
+              timestamp: event.created_at,
+              type: "event" as const,
+            })),
+
+          ...allNotices
+            .slice(0, 3)
+            .map((notice) => ({
+              id: `notice-${notice.id}`,
+              text: notice.published
+                ? "Notice published"
+                : "Notice hidden",
+              detail: notice.title,
+              time: formatRelativeTime(
+                notice.updated_at ||
+                  notice.created_at
+              ),
+              timestamp:
+                notice.updated_at ||
+                notice.created_at,
+              type: "notice" as const,
+            })),
+        ]
+          .sort(
+            (a, b) =>
+              new Date(
+                b.timestamp
+              ).getTime() -
+              new Date(
+                a.timestamp
+              ).getTime()
+          )
+          .slice(0, 4);
+
+        /*
+         * ----------------------------------------------------
+         * NOTIFICATION BELL
+         * ----------------------------------------------------
+         */
+
+        const notificationItems: NotificationItem[] = [
+          // Notices
+          ...allNotices.map(
+            (notice) => ({
+              id: `notification-notice-${notice.id}`,
+              text: notice.published
+                ? "Notice published"
+                : "Notice updated",
+              detail: notice.title,
+              time: formatRelativeTime(
+                notice.updated_at ||
+                  notice.created_at
+              ),
+              timestamp:
+                notice.updated_at ||
+                notice.created_at,
+              type: "notice" as const,
+            })
+          ),
+
+          // Messages
+          ...allMessages.map(
+            (message) => ({
+              id: `notification-message-${message.id}`,
+              text: "New message received",
+              detail:
+                message.subject ||
+                `Message from ${message.name}`,
+              time: formatRelativeTime(
+                message.created_at
+              ),
+              timestamp:
+                message.created_at,
+              type: "message" as const,
+            })
+          ),
+
+          // Recruitment applications
+          ...applications.map(
+            (application) => ({
+              id: `notification-application-${application.id}`,
+              text: "New recruitment application",
+              detail:
+                application.full_name,
+              time: formatRelativeTime(
+                application.created_at
+              ),
+              timestamp:
+                application.created_at,
+              type: "application" as const,
+            })
+          ),
+
+          // Individual registrations
+          ...individualRegistrations.map(
+            (registration) => ({
+              id: `notification-individual-registration-${registration.id}`,
+              text: "New event registration",
+              detail:
+                registrationPageMap.get(
+                  registration.registration_page_id
+                ) ||
+                "Event registration",
+              time: formatRelativeTime(
+                registration.created_at
+              ),
+              timestamp:
+                registration.created_at,
+              type: "registration" as const,
+            })
+          ),
+
+          // Team registrations
+          ...teamRegistrations.map(
+            (registration) => ({
+              id: `notification-team-registration-${registration.id}`,
+              text: "New team registration",
+              detail:
+                registrationPageMap.get(
+                  registration.registration_page_id
+                ) ||
+                "Team event registration",
+              time: formatRelativeTime(
+                registration.created_at
+              ),
+              timestamp:
+                registration.created_at,
+              type: "registration" as const,
+            })
+          ),
+        ]
+          .sort(
+            (a, b) =>
+              new Date(
+                b.timestamp
+              ).getTime() -
+              new Date(
+                a.timestamp
+              ).getTime()
+          )
+          .slice(0, 4);
+
+        /*
+         * ----------------------------------------------------
+         * Update state
+         * ----------------------------------------------------
+         */
+
+        setStats({
+          publishedNotices:
+            publishedNoticeCount,
+
+          upcomingEvents:
+            upcoming.length,
+
+          teamMembers:
+            allTeamMembers.length,
+
+          unreadMessages:
+            unreadResult.count ?? 0,
         });
 
-      if (eventsError) {
-        console.error(
-          "Dashboard events error:",
-          eventsError
+        setUpcomingEvents(
+          upcoming.map((event) => ({
+            id: event.id,
+            title: event.title,
+            date: event.date,
+            time: event.time,
+          }))
         );
-      }
 
-      const allEvents = events ?? [];
+        setRecentMessages(
+          allMessages
+        );
 
-      const upcoming = allEvents
-        .filter((event) => {
-          const eventDate = parseEventDate(
-            event.date
-          );
+        setNoticeOverview({
+          published:
+            publishedNoticeCount,
 
-          if (!eventDate) {
-            return false;
-          }
+          hidden:
+            hiddenNoticeCount,
 
-          eventDate.setHours(0, 0, 0, 0);
+          latest: latestNotice
+            ? {
+                title:
+                  latestNotice.title,
 
-          return eventDate >= today;
-        })
-        .sort((a, b) => {
-          const dateA = parseEventDate(a.date);
-          const dateB = parseEventDate(b.date);
-
-          if (!dateA || !dateB) {
-            return 0;
-          }
-
-          return (
-            dateA.getTime() - dateB.getTime()
-          );
+                date:
+                  latestNotice.date,
+              }
+            : null,
         });
 
-      setUpcomingEvents(
-        upcoming.slice(0, 3).map((event) => ({
-          id: event.id,
-          title: event.title,
-          date: formatEventDate(event.date),
-          time: event.time || "Time TBA",
-          status: "Upcoming",
-        }))
-      );
+        setTeamOverview({
+          ...sectionCounts,
+          total:
+            allTeamMembers.length,
+        });
 
-      /*
-       * =====================================================
-       * TC TEAM OVERVIEW
-       * =====================================================
-       */
-
-      const {
-        data: teamMembers,
-        error: teamError,
-      } = await supabase
-        .from("tc_team")
-        .select("id, section")
-        .eq("published", true);
-
-      if (teamError) {
-        console.error(
-          "Dashboard TC team error:",
-          teamError
+        setActivities(
+          activityItems
         );
-      }
 
-      const teamRows = teamMembers ?? [];
-
-      const teamBreakdown: TeamOverview = {
-        institutionalLeadership: teamRows.filter(
-          (member) =>
-            member.section ===
-            "institutional_leadership"
-        ).length,
-
-        executiveBody: teamRows.filter(
-          (member) =>
-            member.section ===
-            "executive_body"
-        ).length,
-
-        secretaries: teamRows.filter(
-          (member) =>
-            member.section === "secretaries"
-        ).length,
-
-        coSecretaries: teamRows.filter(
-          (member) =>
-            member.section === "co_secretaries"
-        ).length,
-
-        generalMembers: teamRows.filter(
-          (member) =>
-            member.section ===
-            "general_members"
-        ).length,
-
-        total: teamRows.length,
-      };
-
-      setTeamOverview(teamBreakdown);
-
-      /*
-       * =====================================================
-       * UNREAD MESSAGES
-       * =====================================================
-       */
-
-      const {
-        count: unreadMessageCount,
-        error: unreadMessageError,
-      } = await supabase
-        .from("contact_messages")
-        .select("id", {
-          count: "exact",
-          head: true,
-        })
-        .eq("status", "unread");
-
-      if (unreadMessageError) {
-        console.error(
-          "Dashboard unread messages error:",
-          unreadMessageError
+        setNotifications(
+          notificationItems
         );
-      }
 
-      /*
-       * =====================================================
-       * RECENT MESSAGES
-       * =====================================================
-       */
-
-      const {
-        data: messages,
-        error: messagesError,
-      } = await supabase
-        .from("contact_messages")
-        .select(
-          "id, name, subject, status, created_at"
-        )
-        .order("created_at", {
-          ascending: false,
-        })
-        .limit(4);
-
-      if (messagesError) {
-        console.error(
-          "Dashboard messages error:",
-          messagesError
+        setLastSynced(
+          new Date()
         );
+
+        if (errors.length > 0) {
+          setError(
+            "Some dashboard data could not be loaded. The available information is still shown."
+          );
+        }
+      } catch (err) {
+        console.error(
+          "Dashboard loading error:",
+          err
+        );
+
+        setError(
+          "Unable to load the dashboard right now. Please try refreshing."
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-
-      setRecentMessages(
-        (messages ?? []).map((message) => ({
-          id: message.id,
-          name:
-            message.name || "Unknown sender",
-          subject:
-            message.subject || "No subject",
-          created_at: message.created_at,
-          unread:
-            message.status === "unread",
-        }))
-      );
-
-      /*
-       * =====================================================
-       * MAIN STATS
-       * =====================================================
-       */
-
-      setStats({
-        publishedNotices:
-          publishedNoticeCount +
-          scheduledNoticeCount,
-
-        upcomingEvents: upcoming.length,
-
-        teamMembers: teamBreakdown.total,
-
-        unreadMessages:
-          unreadMessageCount ?? 0,
-      });
-
-      /*
-       * =====================================================
-       * RECENT ACTIVITY
-       * =====================================================
-       */
-
-      const activityEvents: ActivityItem[] =
-        allEvents
-          .filter(
-            (event) => event.created_at
-          )
-          .map((event) => ({
-            id: `event-${event.id}`,
-            text: "Event created",
-            detail: event.title,
-            time: formatRelativeTime(
-              event.created_at
-            ),
-            timestamp: event.created_at,
-            type: "event",
-          }));
-
-      const activityNotices: ActivityItem[] =
-        allNotices
-          .filter(
-            (notice) => notice.created_at
-          )
-          .map((notice) => ({
-            id: `notice-${notice.id}`,
-            text: notice.published
-              ? "Notice published"
-              : "Notice drafted",
-            detail: notice.title,
-            time: formatRelativeTime(
-              notice.created_at
-            ),
-            timestamp: notice.created_at,
-            type: "notice",
-          }));
-
-      const combinedActivities = [
-        ...activityEvents,
-        ...activityNotices,
-      ]
-        .sort(
-          (a, b) =>
-            new Date(
-              b.timestamp
-            ).getTime() -
-            new Date(
-              a.timestamp
-            ).getTime()
-        )
-        .slice(0, 4);
-
-      setActivities(combinedActivities);
-
-      /*
-       * =====================================================
-       * LAST SYNCED
-       * =====================================================
-       */
-
-      setLastSynced(new Date());
-    } catch (dashboardError) {
-      console.error(
-        "Dashboard loading error:",
-        dashboardError
-      );
-
-      setError(
-        "Some dashboard data could not be loaded."
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }
-
-  /*
-   * =====================================================
-   * INITIAL LOAD + VISIBILITY REFRESH
-   * =====================================================
-   */
+    },
+    []
+  );
 
   useEffect(() => {
-    loadDashboard();
-
-    const handleVisibilityChange = () => {
-      if (
-        document.visibilityState ===
-        "visible"
-      ) {
-        loadDashboard();
-      }
-    };
-
-    document.addEventListener(
-      "visibilitychange",
-      handleVisibilityChange
-    );
-
-    return () => {
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange
-      );
-    };
-  }, []);
+    void loadDashboard();
+  }, [loadDashboard]);
 
   /*
-   * =====================================================
-   * REAL-TIME UPDATES
-   * =====================================================
+   * --------------------------------------------------------
+   * Realtime dashboard updates
+   * --------------------------------------------------------
    */
 
   useEffect(() => {
     const channel = supabase
       .channel("admin-dashboard-live")
 
+      // Events
       .on(
         "postgres_changes",
         {
@@ -716,10 +884,11 @@ export default function AdminPage() {
           table: "events",
         },
         () => {
-          loadDashboard();
+          void loadDashboard();
         }
       )
 
+      // Notices
       .on(
         "postgres_changes",
         {
@@ -728,10 +897,11 @@ export default function AdminPage() {
           table: "notices",
         },
         () => {
-          loadDashboard();
+          void loadDashboard();
         }
       )
 
+      // Messages
       .on(
         "postgres_changes",
         {
@@ -740,10 +910,11 @@ export default function AdminPage() {
           table: "contact_messages",
         },
         () => {
-          loadDashboard();
+          void loadDashboard();
         }
       )
 
+      // Team
       .on(
         "postgres_changes",
         {
@@ -752,1085 +923,1148 @@ export default function AdminPage() {
           table: "tc_team",
         },
         () => {
-          loadDashboard();
+          void loadDashboard();
+        }
+      )
+
+      // Recruitment applications
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "recruitment_applications",
+        },
+        () => {
+          void loadDashboard();
+        }
+      )
+
+      // Individual event registrations
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "individual_registrations",
+        },
+        () => {
+          void loadDashboard();
+        }
+      )
+
+      // Team event registrations
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "team_registrations",
+        },
+        () => {
+          void loadDashboard();
         }
       )
 
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  /*
-   * =====================================================
-   * CLOSE NOTIFICATION POPUP ON OUTSIDE CLICK
-   * =====================================================
-   */
-
-  useEffect(() => {
-    if (!showNotifications) {
-      return;
-    }
-
-    const handleDocumentClick = () => {
-      setShowNotifications(false);
-    };
-
-    document.addEventListener(
-      "click",
-      handleDocumentClick
-    );
-
-    return () => {
-      document.removeEventListener(
-        "click",
-        handleDocumentClick
+      void supabase.removeChannel(
+        channel
       );
     };
-  }, [showNotifications]);
+  }, [loadDashboard]);
 
-  /*
-   * =====================================================
-   * HELPERS
-   * =====================================================
-   */
+  const displayName = useMemo(() => {
+    if (admin?.name?.trim()) {
+      return admin.name
+        .trim()
+        .split(" ")[0];
+    }
 
-  const displayName =
-    admin?.name?.trim() ||
-    "Administrator";
+    if (admin?.email) {
+      return admin.email.split("@")[0];
+    }
 
-  const displayEmail =
-    admin?.email?.trim() || "Admin";
+    return "Admin";
+  }, [admin]);
 
-  const avatarLetter =
-    displayName
-      .charAt(0)
-      .toUpperCase() || "A";
+  const initials = useMemo(() => {
+    if (!admin?.name) {
+      return "A";
+    }
 
-  const lastSyncedText = lastSynced
-    ? lastSynced.toLocaleTimeString(
-        "en-IN",
-        {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        }
-      )
-    : "Not synced yet";
-
-  /*
-   * =====================================================
-   * RENDER
-   * =====================================================
-   */
+    return admin.name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase();
+  }, [admin]);
 
   return (
-    <div className="min-h-screen bg-[#f6f7fb] text-slate-900">
-      {/* ===================================================
-          HEADER
-      =================================================== */}
+    <main className="min-h-screen bg-[#f6f8fc] text-slate-900">
 
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur-xl">
-        <div className="flex h-20 items-center justify-between px-5 sm:px-8 lg:px-10">
-          <div>
-            <p className="text-sm font-medium text-slate-500">
-              Admin Portal
-            </p>
+      {/* Top Navigation */}
+      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-5 sm:px-8 lg:px-10">
 
-            <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">
-              Dashboard
-            </h1>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-400">
+              <span>Admin Portal</span>
+              <ChevronRight className="h-4 w-4" />
+              <span className="text-slate-900">
+                Dashboard
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* =================================================
-                NOTIFICATION BUTTON
-            ================================================= */}
 
-            <div
-              className="relative"
-              onClick={(event) => {
-                event.stopPropagation();
-              }}
-            >
+            <div className="relative">
+
               <button
                 type="button"
-                title="Notifications"
                 onClick={() =>
                   setShowNotifications(
                     (current) => !current
                   )
                 }
-                className="relative rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50"
+                className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
               >
-                <Bell size={19} />
+                <Bell className="h-4.5 w-4.5" />
 
                 {stats.unreadMessages > 0 && (
-                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" />
+                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
                 )}
               </button>
 
-              {/* =================================================
-                  NOTIFICATION POPUP
-              ================================================= */}
-
+              {/* Notifications */}
               {showNotifications && (
-                <div className="absolute right-0 top-12 z-[80] w-[360px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
-                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4">
-                    <div>
-                      <h3 className="text-sm font-semibold text-slate-950">
-                        Recent Activity
-                      </h3>
+                <div className="absolute right-0 top-12 z-50 w-[330px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
 
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        Your latest dashboard updates
+                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">
+                        Notifications
+                      </p>
+
+                      <p className="text-xs text-slate-400">
+                        Latest 4 updates
                       </p>
                     </div>
 
                     <button
                       type="button"
                       onClick={() =>
-                        setShowNotifications(
-                          false
-                        )
+                        setShowNotifications(false)
                       }
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                      className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                       aria-label="Close notifications"
                     >
-                      <X size={15} />
+                      <X className="h-4 w-4" />
                     </button>
+
                   </div>
 
-                  <div className="max-h-[360px] overflow-y-auto">
-                    {activities.length === 0 ? (
-                      <div className="px-4 py-8 text-center">
-                        <Bell
-                          size={24}
-                          className="mx-auto text-slate-300"
-                        />
+                  {/* No scrollbar — exactly 4 notifications */}
+                  <div className="overflow-hidden">
 
-                        <p className="mt-2 text-sm font-medium text-slate-600">
-                          No recent activity
-                        </p>
-                      </div>
-                    ) : (
-                      activities
+                    {notifications.length > 0 ? (
+                      notifications
                         .slice(0, 4)
                         .map(
-                          (activity) => (
-                            <button
+                          (notification) => (
+                            <div
                               key={
-                                activity.id
+                                notification.id
                               }
-                              type="button"
-                              onClick={() => {
-                                setShowNotifications(
-                                  false
-                                );
-
-                                if (
-                                  activity.type ===
-                                  "event"
-                                ) {
-                                  window.location.href =
-                                    "/admin/events";
-                                } else {
-                                  window.location.href =
-                                    "/admin/notices";
-                                }
-                              }}
-                              className="flex w-full gap-3 border-b border-slate-100 px-4 py-3.5 text-left transition last:border-b-0 hover:bg-slate-50"
+                              className="border-b border-slate-100 px-4 py-3 last:border-0"
                             >
-                              <span
-                                className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${
-                                  activity.type ===
-                                  "event"
-                                    ? "bg-blue-600"
-                                    : "bg-emerald-500"
-                                }`}
-                              />
+                              <div className="flex items-start gap-3">
 
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-slate-900">
-                                  {
-                                    activity.text
-                                  }
-                                </p>
+                                <div
+                                  className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl ${
+                                    notification.type ===
+                                    "notice"
+                                      ? "bg-blue-50 text-blue-600"
+                                      : notification.type ===
+                                          "message"
+                                        ? "bg-violet-50 text-violet-600"
+                                        : notification.type ===
+                                            "application"
+                                          ? "bg-amber-50 text-amber-600"
+                                          : "bg-emerald-50 text-emerald-600"
+                                  }`}
+                                >
+                                  {notification.type ===
+                                  "notice" ? (
+                                    <FileText className="h-4 w-4" />
+                                  ) : notification.type ===
+                                    "message" ? (
+                                    <MessageSquare className="h-4 w-4" />
+                                  ) : notification.type ===
+                                    "application" ? (
+                                    <UserPlus className="h-4 w-4" />
+                                  ) : (
+                                    <CalendarDays className="h-4 w-4" />
+                                  )}
+                                </div>
 
-                                <p className="mt-0.5 truncate text-xs text-slate-500">
-                                  {
-                                    activity.detail
-                                  }
-                                </p>
+                                <div className="min-w-0 flex-1">
 
-                                <p className="mt-1 text-[11px] text-slate-400">
-                                  {
-                                    activity.time
-                                  }
-                                </p>
+                                  <p className="text-xs font-bold text-slate-900">
+                                    {
+                                      notification.text
+                                    }
+                                  </p>
+
+                                  <p className="mt-0.5 truncate text-xs text-slate-500">
+                                    {
+                                      notification.detail
+                                    }
+                                  </p>
+
+                                  <p className="mt-1 text-[11px] text-slate-400">
+                                    {
+                                      notification.time
+                                    }
+                                  </p>
+
+                                </div>
+
                               </div>
-
-                              <ChevronRight
-                                size={15}
-                                className="mt-1 shrink-0 text-slate-300"
-                              />
-                            </button>
+                            </div>
                           )
                         )
+                    ) : (
+                      <div className="px-4 py-8 text-center text-sm text-slate-400">
+                        You&apos;re all caught up.
+                      </div>
                     )}
-                  </div>
 
-                  
+                  </div>
                 </div>
               )}
+
             </div>
 
-            <div className="hidden h-9 w-px bg-slate-200 sm:block" />
+            <div className="hidden h-8 w-px bg-slate-200 sm:block" />
 
-            <div className="hidden items-center gap-3 sm:flex">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#527dff] to-[#21c997] text-xs font-semibold text-white">
-                {avatarLetter}
-              </div>
+            <div className="flex items-center gap-3">
 
-              <div>
-                <p className="max-w-[160px] truncate text-sm font-semibold text-slate-900">
-                  {displayName}
+              <div className="hidden text-right sm:block">
+                <p className="text-sm font-bold text-slate-900">
+                  {admin?.name ||
+                    "Administrator"}
                 </p>
 
-                <p className="max-w-[160px] truncate text-xs text-slate-500">
-                  {displayEmail}
+                <p className="text-xs text-slate-400">
+                  Administrator
                 </p>
               </div>
+
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 via-teal-400 to-blue-500 text-sm font-bold text-white shadow-md shadow-blue-500/20">
+                {initials}
+              </div>
+
             </div>
           </div>
+
         </div>
       </header>
 
-      {/* =====================================================
-          DASHBOARD CONTENT
-      ===================================================== */}
+      <div className="mx-auto max-w-[1600px] px-5 py-7 sm:px-8 lg:px-10">
 
-      <div className="px-5 py-7 sm:px-8 lg:px-10 lg:py-9">
-        {/* ===================================================
-            WELCOME
-        =================================================== */}
+        {/* Hero */}
+        <section className="relative mb-7 overflow-hidden rounded-[28px] border border-white/80 bg-white/75 px-6 py-8 shadow-[0_20px_60px_-25px_rgba(15,23,42,0.18)] backdrop-blur-2xl sm:px-8 lg:px-10 lg:py-9">
 
-        <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight text-slate-950">
-              Welcome back, {displayName}
-            </h2>
+          <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-blue-200/30 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-40 right-1/3 h-80 w-80 rounded-full bg-emerald-200/25 blur-3xl" />
+          <div className="pointer-events-none absolute -left-32 bottom-0 h-64 w-64 rounded-full bg-cyan-100/30 blur-3xl" />
 
-            <p className="mt-1 text-sm text-slate-500">
-              Manage your Technical Council website from one place.
-            </p>
+          <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+
+            <div className="max-w-3xl">
+
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/70 px-3.5 py-1.5 text-xs font-semibold text-slate-600 shadow-sm backdrop-blur-md">
+
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 text-white">
+                  <Sparkles className="h-3 w-3" />
+                </span>
+
+                Technical Council Control Center
+              </div>
+
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                Welcome back{" "}
+                <span className="bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-600 bg-clip-text text-transparent">
+                  {displayName}.
+                </span>
+              </h1>
+
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
+                Everything your council needs, all in one place. Keep the website
+                fresh, your team connected, and every update moving forward.
+              </p>
+
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+
+                <span className="text-xs font-medium text-slate-400">
+                  {getTodayLabel()}
+                </span>
+
+                <span className="h-1 w-1 rounded-full bg-slate-300" />
+
+                <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
+                  Website connected
+                </span>
+
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3 lg:justify-end">
+
+              <button
+                type="button"
+                onClick={() =>
+                  void loadDashboard(true)
+                }
+                disabled={refreshing}
+                className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur-md transition hover:border-slate-300 hover:bg-white hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${
+                    refreshing
+                      ? "animate-spin"
+                      : ""
+                  }`}
+                />
+                Refresh
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowQuickActions(true)
+                }
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-500 px-4 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-500/25"
+              >
+                <Plus className="h-4 w-4" />
+                Quick Actions
+              </button>
+
+            </div>
+
           </div>
+        </section>
 
-          <div className="flex items-center gap-2">
+        {/* Error */}
+        {error && (
+          <div className="mb-6 flex items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+
+            <span>{error}</span>
+
             <button
               type="button"
-              title="Refresh dashboard"
               onClick={() =>
-                loadDashboard(true)
+                void loadDashboard(true)
               }
-              disabled={refreshing}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="shrink-0 font-bold underline underline-offset-2"
             >
-              <RefreshCw
-                size={16}
-                className={
-                  refreshing
-                    ? "animate-spin"
-                    : ""
-                }
-              />
-
-              <span className="hidden sm:inline">
-                Refresh
-              </span>
+              Try again
             </button>
+
+          </div>
+        )}
+
+        {/* Stats */}
+        <section className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+
+          <StatCard
+            label="Published Notices"
+            value={
+              stats.publishedNotices
+            }
+            description="Visible on the website"
+            icon={
+              <Bell className="h-5 w-5" />
+            }
+            href="/admin/notices"
+            loading={loading}
+          />
+
+          <StatCard
+            label="Upcoming Events"
+            value={
+              stats.upcomingEvents
+            }
+            description="Events coming up"
+            icon={
+              <CalendarDays className="h-5 w-5" />
+            }
+            href="/admin/events"
+            loading={loading}
+          />
+
+          <StatCard
+            label="Team Members"
+            value={stats.teamMembers}
+            description="Published profiles"
+            icon={
+              <Users className="h-5 w-5" />
+            }
+            href="/admin/team"
+            loading={loading}
+          />
+
+          <StatCard
+            label="Unread Messages"
+            value={
+              stats.unreadMessages
+            }
+            description={
+              stats.unreadMessages ===
+              0
+                ? "Inbox is all clear"
+                : "Needs your attention"
+            }
+            icon={
+              <MessageSquare className="h-5 w-5" />
+            }
+            href="/admin/messages"
+            loading={loading}
+          />
+
+        </section>
+
+        {/* Main Grid */}
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+
+          {/* Upcoming Events */}
+          <div className="xl:col-span-7">
+
+            <DashboardCard
+              title="What's happening"
+              subtitle="Your next events at a glance"
+              icon={
+                <CalendarDays className="h-5 w-5" />
+              }
+              action={
+                <Link
+                  href="/admin/events"
+                  className="text-xs font-bold text-slate-500 transition hover:text-slate-900"
+                >
+                  View all
+                </Link>
+              }
+            >
+
+              {loading ? (
+                <LoadingRows />
+              ) : upcomingEvents.length >
+                0 ? (
+
+                <div className="space-y-3">
+
+                  {upcomingEvents.map(
+                    (event) => (
+
+                      <Link
+                        key={event.id}
+                        href="/admin/events"
+                        className="group flex items-center gap-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-3.5 transition hover:border-slate-200 hover:bg-white hover:shadow-sm"
+                      >
+
+                        <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-slate-100">
+
+                          <span className="text-[10px] font-bold uppercase text-slate-400">
+                            {
+                              formatShortDate(
+                                event.date
+                              ).split(" ")[1]
+                            }
+                          </span>
+
+                          <span className="text-lg font-bold leading-none text-slate-900">
+                            {
+                              formatShortDate(
+                                event.date
+                              ).split(" ")[0]
+                            }
+                          </span>
+
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+
+                          <p className="truncate text-sm font-bold text-slate-900 group-hover:text-indigo-600">
+                            {event.title}
+                          </p>
+
+                          <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+
+                            <span className="flex items-center gap-1">
+                              <CalendarDays className="h-3.5 w-3.5" />
+                              {formatEventDate(
+                                event.date
+                              )}
+                            </span>
+
+                            {event.time && (
+                              <span className="flex items-center gap-1">
+                                <Clock3 className="h-3.5 w-3.5" />
+                                {event.time}
+                              </span>
+                            )}
+
+                          </div>
+                        </div>
+
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" />
+
+                      </Link>
+
+                    )
+                  )}
+
+                </div>
+
+              ) : (
+
+                <EmptyState
+                  icon={
+                    <CalendarDays className="h-6 w-6" />
+                  }
+                  title="A quiet calendar"
+                  description="No upcoming events yet. Create your next council moment."
+                  href="/admin/events"
+                  action="Create Event"
+                />
+
+              )}
+
+            </DashboardCard>
+
+          </div>
+
+          {/* Recent Messages */}
+          <div className="xl:col-span-5">
+
+            <DashboardCard
+              title="Inbox"
+              subtitle="Latest messages from your website"
+              icon={
+                <MessageSquare className="h-5 w-5" />
+              }
+              action={
+                <Link
+                  href="/admin/messages"
+                  className="text-xs font-bold text-slate-500 transition hover:text-slate-900"
+                >
+                  View inbox
+                </Link>
+              }
+            >
+
+              {loading ? (
+                <LoadingRows />
+              ) : recentMessages.length >
+                0 ? (
+
+                <div className="space-y-2">
+
+                  {recentMessages.map(
+                    (message) => (
+
+                      <Link
+                        key={message.id}
+                        href="/admin/messages"
+                        className="group flex items-center gap-3 rounded-xl px-2 py-3 transition hover:bg-slate-50"
+                      >
+
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xs font-bold text-slate-600">
+
+                          {message.name
+                            .split(" ")
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .map(
+                              (part) =>
+                                part[0]
+                            )
+                            .join("")
+                            .toUpperCase()}
+
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+
+                          <div className="flex items-center gap-2">
+
+                            <p className="truncate text-sm font-semibold text-slate-900">
+                              {message.name}
+                            </p>
+
+                            {message.status ===
+                              "unread" && (
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500" />
+                            )}
+
+                          </div>
+
+                          <p className="truncate text-xs text-slate-400">
+                            {message.subject}
+                          </p>
+
+                        </div>
+
+                        <span className="shrink-0 text-[11px] text-slate-400">
+                          {formatRelativeTime(
+                            message.created_at
+                          )}
+                        </span>
+
+                      </Link>
+
+                    )
+                  )}
+
+                </div>
+
+              ) : (
+
+                <EmptyState
+                  icon={
+                    <MessageSquare className="h-6 w-6" />
+                  }
+                  title="Inbox is quiet"
+                  description="No messages have arrived recently."
+                  href="/admin/messages"
+                  action="Open Inbox"
+                />
+
+              )}
+
+            </DashboardCard>
+
+          </div>
+
+          {/* Notice Overview */}
+          <div className="xl:col-span-4">
+
+            <DashboardCard
+              title="Notice board"
+              subtitle="Keep everyone informed"
+              icon={
+                <Bell className="h-5 w-5" />
+              }
+              action={
+                <Link
+                  href="/admin/notices"
+                  className="text-xs font-bold text-slate-500 hover:text-slate-900"
+                >
+                  Manage
+                </Link>
+              }
+            >
+
+              <div className="grid grid-cols-2 gap-3">
+
+                <div className="rounded-2xl bg-emerald-50 p-4">
+                  <p className="text-2xl font-bold text-emerald-700">
+                    {
+                      noticeOverview.published
+                    }
+                  </p>
+
+                  <p className="mt-1 text-xs font-semibold text-emerald-700/70">
+                    Published
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-slate-100 p-4">
+                  <p className="text-2xl font-bold text-slate-700">
+                    {
+                      noticeOverview.hidden
+                    }
+                  </p>
+
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    Hidden
+                  </p>
+                </div>
+
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Latest update
+                </p>
+
+                {noticeOverview.latest ? (
+                  <>
+                    <p className="mt-2 line-clamp-2 text-sm font-bold text-slate-900">
+                      {
+                        noticeOverview
+                          .latest.title
+                      }
+                    </p>
+
+                    <p className="mt-1 text-xs text-slate-400">
+                      {formatEventDate(
+                        noticeOverview
+                          .latest.date
+                      )}
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-400">
+                    No notices created yet.
+                  </p>
+                )}
+
+              </div>
+
+            </DashboardCard>
+
+          </div>
+
+          {/* Team Overview */}
+          <div className="xl:col-span-4">
+
+            <DashboardCard
+              title="Your team"
+              subtitle="Council structure at a glance"
+              icon={
+                <Users className="h-5 w-5" />
+              }
+              action={
+                <Link
+                  href="/admin/team"
+                  className="text-xs font-bold text-slate-500 hover:text-slate-900"
+                >
+                  Manage
+                </Link>
+              }
+            >
+
+              <div className="relative mb-4 flex items-end justify-between overflow-hidden rounded-2xl border border-white/80 bg-white/75 p-5 shadow-[0_20px_60px_-25px_rgba(15,23,42,0.18)] backdrop-blur-2xl">
+
+                <div className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-blue-200/30 blur-3xl" />
+              
+                <div className="pointer-events-none absolute -bottom-12 -left-8 h-24 w-24 rounded-full bg-emerald-200/25 blur-3xl" />
+              
+                <div className="relative z-10">
+                  <p className="text-xs font-medium text-slate-400">
+                    Total published members
+                  </p>
+              
+                  <p className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
+                    {teamOverview.total}
+                  </p>
+                </div>
+              
+                <Users className="relative z-10 h-8 w-8 text-slate-400" />
+              
+              </div>
+
+              <div className="space-y-2">
+
+                <TeamRow
+                  label="Institutional Leadership"
+                  value={
+                    teamOverview.institutionalLeadership
+                  }
+                />
+
+                <TeamRow
+                  label="Executive Body"
+                  value={
+                    teamOverview.executiveBody
+                  }
+                />
+
+                <TeamRow
+                  label="Secretaries"
+                  value={
+                    teamOverview.secretaries
+                  }
+                />
+
+                <TeamRow
+                  label="Co-Secretaries"
+                  value={
+                    teamOverview.coSecretaries
+                  }
+                />
+
+                <TeamRow
+                  label="General Members"
+                  value={
+                    teamOverview.generalMembers
+                  }
+                />
+
+              </div>
+
+            </DashboardCard>
+
+          </div>
+
+          {/* Website Health — improved */}
+          <div className="xl:col-span-4">
+
+            <DashboardCard
+              title="Website health"
+              subtitle="Live connection status"
+              icon={
+                <CheckCircle2 className="h-5 w-5" />
+              }
+            >
+
+              <div className="relative overflow-hidden rounded-2xl bg-emerald-50 p-5">
+
+                <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-emerald-100" />
+
+                <div className="relative">
+
+                  {/* Main status */}
+                  <div className="flex items-center justify-between">
+
+                    <div className="flex items-center gap-2.5">
+
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" />
+
+                      <div>
+                        <p className="text-sm font-bold text-emerald-800">
+                          Website Online
+                        </p>
+
+                        <p className="mt-0.5 text-[11px] font-medium text-emerald-700/60">
+                          Public website is connected
+                        </p>
+                      </div>
+
+                    </div>
+
+                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+
+                  </div>
+
+                  {/* Health overview */}
+                  <div className="mt-5 grid grid-cols-2 gap-2.5">
+
+                    <div className="rounded-xl border border-emerald-100 bg-white/75 p-3">
+
+                      <div className="flex items-center justify-between gap-2">
+
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Dashboard
+                        </p>
+
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+
+                      </div>
+
+                      <p className="mt-1.5 text-xs font-bold text-slate-800">
+                        Operational
+                      </p>
+
+                    </div>
+
+                    <div className="rounded-xl border border-emerald-100 bg-white/75 p-3">
+
+                      <div className="flex items-center justify-between gap-2">
+
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Events
+                        </p>
+
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+
+                      </div>
+
+                      <p className="mt-1.5 text-xs font-bold text-slate-800">
+                        {stats.upcomingEvents} upcoming
+                      </p>
+
+                    </div>
+
+                    <div className="rounded-xl border border-emerald-100 bg-white/75 p-3">
+
+                      <div className="flex items-center justify-between gap-2">
+
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Team
+                        </p>
+
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+
+                      </div>
+
+                      <p className="mt-1.5 text-xs font-bold text-slate-800">
+                        {stats.teamMembers} profiles
+                      </p>
+
+                    </div>
+
+                    <div className="rounded-xl border border-emerald-100 bg-white/75 p-3">
+
+                      <div className="flex items-center justify-between gap-2">
+
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Content
+                        </p>
+
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+
+                      </div>
+
+                      <p className="mt-1.5 text-xs font-bold text-slate-800">
+                        {stats.publishedNotices} notices live
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                  {/* Bottom actions */}
+                  <div className="mt-4 flex items-center justify-between gap-3 border-t border-emerald-100/80 pt-4">
+
+                    <div>
+
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700/50">
+                        Last synced
+                      </p>
+
+                      <p className="mt-1 text-xs font-semibold text-emerald-800">
+
+                        {lastSynced
+                          ? lastSynced.toLocaleTimeString(
+                              "en-IN",
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )
+                          : "—"}
+
+                      </p>
+
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        window.open(
+                          "/",
+                          "_blank",
+                          "noopener,noreferrer"
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-bold text-emerald-800 shadow-sm ring-1 ring-emerald-100 transition hover:-translate-y-0.5 hover:shadow"
+                    >
+                      Open Website
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </button>
+
+                  </div>
+
+                </div>
+              </div>
+
+            </DashboardCard>
+
+          </div>
+
+          {/* Activity */}
+          <div className="xl:col-span-12">
+
+            <DashboardCard
+              title="Recent activity"
+              subtitle="A quick pulse of what changed"
+              icon={
+                <Clock3 className="h-5 w-5" />
+              }
+              action={
+                <span className="text-xs font-medium text-slate-400">
+                  Latest updates
+                </span>
+              }
+            >
+
+              {activities.length > 0 ? (
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+
+                  {activities.map(
+                    (activity) => (
+
+                      <Link
+                        key={activity.id}
+                        href={
+                          activity.type ===
+                          "event"
+                            ? "/admin/events"
+                            : "/admin/notices"
+                        }
+                        className="group rounded-2xl border border-slate-100 bg-slate-50/70 p-4 transition hover:border-slate-200 hover:bg-white hover:shadow-sm"
+                      >
+
+                        <div className="flex items-start justify-between gap-3">
+
+                          <div
+                            className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+                              activity.type ===
+                              "event"
+                                ? "bg-blue-50 text-blue-600"
+                                : "bg-indigo-50 text-indigo-600"
+                            }`}
+                          >
+
+                            {activity.type ===
+                            "event" ? (
+                              <CalendarDays className="h-4 w-4" />
+                            ) : (
+                              <Bell className="h-4 w-4" />
+                            )}
+
+                          </div>
+
+                          <span className="text-[11px] text-slate-400">
+                            {activity.time}
+                          </span>
+
+                        </div>
+
+                        <p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-400">
+                          {activity.text}
+                        </p>
+
+                        <p className="mt-1 line-clamp-2 text-sm font-bold text-slate-900 group-hover:text-indigo-600">
+                          {activity.detail}
+                        </p>
+
+                      </Link>
+
+                    )
+                  )}
+
+                </div>
+
+              ) : (
+
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-5 py-10 text-center">
+
+                  <Clock3 className="mx-auto h-7 w-7 text-slate-300" />
+
+                  <p className="mt-3 text-sm font-bold text-slate-700">
+                    Your activity feed is waiting
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-400">
+                    Publish a notice or create an event to see updates here.
+                  </p>
+
+                </div>
+
+              )}
+
+            </DashboardCard>
+
+          </div>
+
+        </section>
+
+        {/* Bottom Catchy Section */}
+        <section className="mt-7 overflow-hidden rounded-[28px] border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-blue-50 px-6 py-7 sm:px-8">
+
+          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+
+            <div className="max-w-2xl">
+
+              <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-600">
+                <Sparkles className="h-4 w-4" />
+                Keep the momentum going
+              </div>
+
+              <h2 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+                Build the council. Share the work. Make the impact visible.
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Your dashboard is the command center for everything happening
+                across Technical Council. One update here keeps the entire
+                website moving.
+              </p>
+
+            </div>
 
             <button
               type="button"
               onClick={() =>
                 setShowQuickActions(true)
               }
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-emerald-600 hover:to-blue-700"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-slate-800"
             >
-              <Plus size={17} />
-              Quick Action
+              <Plus className="h-4 w-4" />
+              Do something useful
             </button>
+
           </div>
-        </div>
 
-        {error && (
-          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            {error}
-          </div>
-        )}
-
-        {/* ===================================================
-            MAIN STATS
-        =================================================== */}
-
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            {
-              title: "Published Notices",
-              value:
-                stats.publishedNotices,
-              icon: Bell,
-              description:
-                "Published & scheduled",
-              href: "/admin/notices",
-            },
-            {
-              title: "Upcoming Events",
-              value:
-                stats.upcomingEvents,
-              icon: CalendarDays,
-              description:
-                "Scheduled events",
-              href: "/admin/events",
-            },
-            {
-              title: "Team Members",
-              value:
-                stats.teamMembers,
-              icon: Users,
-              description:
-                "Council members",
-              href: "/admin/team",
-            },
-            {
-              title: "Unread Messages",
-              value:
-                stats.unreadMessages,
-              icon: MessageSquare,
-              description:
-                "Needs attention",
-              href: "/admin/messages?status=unread",
-            },
-          ].map((stat) => {
-            const Icon = stat.icon;
-
-            return (
-              <button
-                key={stat.title}
-                type="button"
-                onClick={() => {
-                  window.location.href =
-                    stat.href;
-                }}
-                className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-slate-500">
-                      {stat.title}
-                    </p>
-
-                    <p className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
-                      {loading ? (
-                        <Loader2
-                          size={27}
-                          className="animate-spin text-slate-300"
-                        />
-                      ) : (
-                        stat.value
-                      )}
-                    </p>
-                  </div>
-
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-                    <Icon size={19} />
-                  </div>
-                </div>
-
-                <p className="mt-4 text-xs text-slate-400">
-                  {stat.description}
-                </p>
-              </button>
-            );
-          })}
         </section>
 
-        {/* ===================================================
-            UPCOMING EVENTS + RECENT MESSAGES
-        =================================================== */}
-
-        <section className="mt-6 grid gap-6 xl:grid-cols-[1.35fr_1fr]">
-          {/* Upcoming Events */}
-
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5">
-              <div>
-                <h3 className="font-semibold text-slate-950">
-                  Upcoming Events
-                </h3>
-
-                <p className="mt-1 text-xs text-slate-500">
-                  Events currently scheduled
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.href =
-                    "/admin/events";
-                }}
-                className="text-sm font-semibold text-slate-700 transition hover:text-slate-950"
-              >
-                View all
-              </button>
-            </div>
-
-            <div className="divide-y divide-slate-100">
-              {loading ? (
-                <div className="flex items-center justify-center px-5 py-10 text-sm text-slate-400">
-                  <Loader2
-                    size={18}
-                    className="mr-2 animate-spin"
-                  />
-                  Loading events...
-                </div>
-              ) : upcomingEvents.length ===
-                0 ? (
-                <div className="px-5 py-10 text-center">
-                  <CalendarDays
-                    size={28}
-                    className="mx-auto text-slate-300"
-                  />
-
-                  <p className="mt-3 text-sm font-semibold text-slate-600">
-                    No upcoming events
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-400">
-                    Published upcoming events will appear here.
-                  </p>
-                </div>
-              ) : (
-                upcomingEvents.map(
-                  (event) => (
-                    <button
-                      key={event.id}
-                      type="button"
-                      onClick={() => {
-                        window.location.href =
-                          "/admin/events";
-                      }}
-                      className="flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-slate-50"
-                    >
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-                        <CalendarDays
-                          size={18}
-                        />
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-900">
-                          {event.title}
-                        </p>
-
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                          <Clock3 size={13} />
-
-                          <span>
-                            {event.date}
-                          </span>
-
-                          <span>·</span>
-
-                          <span>
-                            {event.time}
-                          </span>
-                        </div>
-                      </div>
-
-                      <span className="hidden rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 sm:block">
-                        {event.status}
-                      </span>
-
-                      <ChevronRight
-                        size={17}
-                        className="shrink-0 text-slate-400"
-                      />
-                    </button>
-                  )
-                )
-              )}
-            </div>
-          </div>
-
-          {/* Recent Messages */}
-
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5">
-              <div>
-                <h3 className="font-semibold text-slate-950">
-                  Recent Messages
-                </h3>
-
-                <p className="mt-1 text-xs text-slate-500">
-                  Messages from your contact page
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.href =
-                    "/admin/messages";
-                }}
-                className="text-sm font-semibold text-slate-700 transition hover:text-slate-950"
-              >
-                View all
-              </button>
-            </div>
-
-            <div className="divide-y divide-slate-100">
-              {loading ? (
-                <div className="flex items-center justify-center px-5 py-10 text-sm text-slate-400">
-                  <Loader2
-                    size={18}
-                    className="mr-2 animate-spin"
-                  />
-                  Loading messages...
-                </div>
-              ) : recentMessages.length ===
-                0 ? (
-                <div className="px-5 py-10 text-center">
-                  <MessageSquare
-                    size={28}
-                    className="mx-auto text-slate-300"
-                  />
-
-                  <p className="mt-3 text-sm font-semibold text-slate-600">
-                    No messages yet
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-400">
-                    New contact messages will appear here.
-                  </p>
-                </div>
-              ) : (
-                recentMessages.map(
-                  (message) => (
-                    <button
-                      key={message.id}
-                      type="button"
-                      onClick={() => {
-                        window.location.href =
-                          "/admin/messages";
-                      }}
-                      className="flex w-full items-center gap-3 px-5 py-4 text-left transition hover:bg-slate-50"
-                    >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
-                        {message.name
-                          .charAt(0)
-                          .toUpperCase()}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate text-sm font-semibold text-slate-900">
-                            {
-                              message.name
-                            }
-                          </p>
-
-                          {message.unread && (
-                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
-                          )}
-                        </div>
-
-                        <p className="truncate text-xs text-slate-500">
-                          {
-                            message.subject
-                          }
-                        </p>
-                      </div>
-
-                      <span className="shrink-0 text-[11px] text-slate-400">
-                        {formatRelativeTime(
-                          message.created_at
-                        )}
-                      </span>
-
-                      <ChevronRight
-                        size={15}
-                        className="shrink-0 text-slate-300"
-                      />
-                    </button>
-                  )
-                )
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* ===================================================
-            NOTICE OVERVIEW + TEAM OVERVIEW
-        =================================================== */}
-
-        <section className="mt-6 grid gap-6 xl:grid-cols-2">
-          {/* =================================================
-              NOTICE OVERVIEW
-          ================================================= */}
-
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5">
-              <div>
-                <h3 className="font-semibold text-slate-950">
-                  Notice Overview
-                </h3>
-
-                <p className="mt-1 text-xs text-slate-500">
-                  Current website notice status
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.href =
-                    "/admin/notices";
-                }}
-                className="text-sm font-semibold text-slate-700 transition hover:text-slate-950"
-              >
-                Manage
-              </button>
-            </div>
-
-            <div className="p-5">
-              <div className="grid grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.href =
-                      "/admin/notices";
-                  }}
-                  className="rounded-xl bg-emerald-50 p-4 text-left transition hover:bg-emerald-100"
-                >
-                  <p className="text-xs font-medium text-emerald-700">
-                    Published
-                  </p>
-
-                  <p className="mt-1 text-2xl font-bold text-emerald-900">
-                    {loading ? (
-                      <Loader2
-                        size={21}
-                        className="animate-spin"
-                      />
-                    ) : (
-                      noticeOverview.published
-                    )}
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.href =
-                      "/admin/notices";
-                  }}
-                  className="rounded-xl bg-slate-100 p-4 text-left transition hover:bg-slate-200"
-                >
-                  <p className="text-xs font-medium text-slate-600">
-                    Draft
-                  </p>
-
-                  <p className="mt-1 text-2xl font-bold text-slate-900">
-                    {loading ? (
-                      <Loader2
-                        size={21}
-                        className="animate-spin"
-                      />
-                    ) : (
-                      noticeOverview.draft
-                    )}
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.href =
-                      "/admin/notices";
-                  }}
-                  className="rounded-xl bg-blue-50 p-4 text-left transition hover:bg-blue-100"
-                >
-                  <p className="text-xs font-medium text-blue-700">
-                    Scheduled
-                  </p>
-
-                  <p className="mt-1 text-2xl font-bold text-blue-900">
-                    {loading ? (
-                      <Loader2
-                        size={21}
-                        className="animate-spin"
-                      />
-                    ) : (
-                      noticeOverview.scheduled
-                    )}
-                  </p>
-                </button>
-              </div>
-
-              <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/70 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  Latest Notice
-                </p>
-
-                {noticeOverview.latest ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.location.href =
-                        "/admin/notices";
-                    }}
-                    className="mt-2 flex w-full items-center gap-3 text-left"
-                  >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-slate-600 shadow-sm">
-                      <Bell size={16} />
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-800">
-                        {
-                          noticeOverview
-                            .latest
-                            .title
-                        }
-                      </p>
-
-                      <p className="mt-0.5 text-xs text-slate-400">
-                        {
-                          noticeOverview
-                            .latest
-                            .date
-                        }
-                      </p>
-                    </div>
-
-                    <ChevronRight
-                      size={16}
-                      className="text-slate-300"
-                    />
-                  </button>
-                ) : (
-                  <p className="mt-2 text-sm text-slate-400">
-                    No notices available.
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* =================================================
-              TC TEAM OVERVIEW
-          ================================================= */}
-
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5">
-              <div>
-                <h3 className="font-semibold text-slate-950">
-                  TC Team Overview
-                </h3>
-
-                <p className="mt-1 text-xs text-slate-500">
-                  Published Technical Council members
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.href =
-                    "/admin/team";
-                }}
-                className="text-sm font-semibold text-slate-700 transition hover:text-slate-950"
-              >
-                Manage
-              </button>
-            </div>
-
-            <div className="p-5">
-              <div className="grid gap-2 sm:grid-cols-2">
-                {[
-                  {
-                    label:
-                      "Institutional Leadership",
-                    value:
-                      teamOverview.institutionalLeadership,
-                  },
-                  {
-                    label: "Executive Body",
-                    value:
-                      teamOverview.executiveBody,
-                  },
-                  {
-                    label: "Secretaries",
-                    value:
-                      teamOverview.secretaries,
-                  },
-                  {
-                    label: "Co-Secretaries",
-                    value:
-                      teamOverview.coSecretaries,
-                  },
-                  {
-                    label: "General Members",
-                    value:
-                      teamOverview.generalMembers,
-                  },
-                ].map((item) => (
-                  <button
-                    key={item.label}
-                    type="button"
-                    onClick={() => {
-                      window.location.href =
-                        "/admin/team";
-                    }}
-                    className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 text-left transition hover:border-slate-200 hover:bg-slate-50"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm">
-                        <Users size={15} />
-                      </div>
-
-                      <span className="truncate text-xs font-medium text-slate-600">
-                        {item.label}
-                      </span>
-                    </div>
-
-                    <span className="ml-3 text-base font-bold text-slate-900">
-                      {loading ? (
-                        <Loader2
-                          size={17}
-                          className="animate-spin text-slate-300"
-                        />
-                      ) : (
-                        item.value
-                      )}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.href =
-                    "/admin/team";
-                }}
-                className="mt-3 flex w-full items-center justify-between rounded-xl bg-slate-900 px-4 py-3 text-left text-white transition hover:bg-slate-800"
-              >
-                <div>
-                  <p className="text-xs font-medium text-slate-400">
-                    Total Published Members
-                  </p>
-
-                  <p className="mt-0.5 text-lg font-bold">
-                    {loading ? (
-                      <Loader2
-                        size={19}
-                        className="animate-spin"
-                      />
-                    ) : (
-                      teamOverview.total
-                    )}
-                  </p>
-                </div>
-
-                <ChevronRight size={17} />
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* ===================================================
-            WEBSITE STATUS
-        =================================================== */}
-
-        <section className="mt-6">
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                  <div className="relative">
-                    <div className="h-3 w-3 rounded-full bg-emerald-500" />
-
-                    <div className="absolute inset-0 animate-ping rounded-full bg-emerald-400 opacity-30" />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-slate-950">
-                      Website Status
-                    </h3>
-
-                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
-                      Online
-                    </span>
-                  </div>
-
-                  <p className="mt-1 text-xs text-slate-500">
-                    Dashboard connected successfully to the website data.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="rounded-xl bg-slate-50 px-4 py-2.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                    Last synced
-                  </p>
-
-                  <p className="mt-0.5 text-xs font-semibold text-slate-700">
-                    {lastSyncedText}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.open(
-                      "/",
-                      "_blank",
-                      "noopener,noreferrer"
-                    );
-                  }}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  Open Website
-                  <ExternalLink size={15} />
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ===================================================
-            RECENT ACTIVITY
-        =================================================== */}
-
-        <section className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-5">
-            <h3 className="font-semibold text-slate-950">
-              Recent Activity
-            </h3>
-
-            <p className="mt-1 text-xs text-slate-500">
-              Latest event and notice updates
-            </p>
-          </div>
-
-          <div className="grid divide-y divide-slate-100 md:grid-cols-2 md:divide-x md:divide-y-0">
-            {loading ? (
-              <div className="flex items-center justify-center px-5 py-10 text-sm text-slate-400 md:col-span-2">
-                <Loader2
-                  size={18}
-                  className="mr-2 animate-spin"
-                />
-                Loading activity...
-              </div>
-            ) : activities.length === 0 ? (
-              <div className="px-5 py-10 text-center md:col-span-2">
-                <p className="text-sm font-semibold text-slate-600">
-                  No recent activity
-                </p>
-
-                <p className="mt-1 text-xs text-slate-400">
-                  New events and notices will appear here.
-                </p>
-              </div>
-            ) : (
-              activities.map(
-                (activity) => (
-                  <button
-                    key={activity.id}
-                    type="button"
-                    onClick={() => {
-                      if (
-                        activity.type ===
-                        "event"
-                      ) {
-                        window.location.href =
-                          "/admin/events";
-                      } else {
-                        window.location.href =
-                          "/admin/notices";
-                      }
-                    }}
-                    className="flex w-full gap-4 px-5 py-5 text-left transition hover:bg-slate-50"
-                  >
-                    <div
-                      className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-                        activity.type ===
-                        "event"
-                          ? "bg-blue-600"
-                          : "bg-emerald-500"
-                      }`}
-                    />
-
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-slate-900">
-                        {activity.text}
-                      </p>
-
-                      <p className="mt-1 text-sm text-slate-500">
-                        {activity.detail}
-                      </p>
-
-                      <p className="mt-2 text-xs text-slate-400">
-                        {activity.time}
-                      </p>
-                    </div>
-
-                    <ChevronRight
-                      size={16}
-                      className="mt-1 shrink-0 text-slate-300"
-                    />
-                  </button>
-                )
-              )
-            )}
-          </div>
-        </section>
       </div>
 
-      {/* =====================================================
-          QUICK ACTION MODAL
-      ===================================================== */}
-
+      {/* Quick Actions Modal */}
       {showQuickActions && (
+
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/30 p-5 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
           onMouseDown={(event) => {
+
             if (
               event.target ===
               event.currentTarget
             ) {
               setShowQuickActions(false);
             }
+
           }}
         >
-          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.20)]">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-950">
-                  Quick Actions
-                </h2>
 
-                <p className="mt-1 text-xs text-slate-500">
-                  Quickly jump to a common admin task.
-                </p>
+          <div className="w-full max-w-lg overflow-hidden rounded-[28px] bg-white shadow-2xl">
+
+            <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
+
+              <div>
+
+                <div className="flex items-center gap-2">
+
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950 text-white">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+
+                  <div>
+
+                    <h2 className="text-lg font-bold text-slate-900">
+                      Quick Actions
+                    </h2>
+
+                    <p className="text-xs text-slate-400">
+                      What would you like to manage?
+                    </p>
+
+                  </div>
+
+                </div>
+
               </div>
 
               <button
@@ -1838,69 +2072,310 @@ export default function AdminPage() {
                 onClick={() =>
                   setShowQuickActions(false)
                 }
-                className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900"
-                aria-label="Close quick actions"
+                className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
               >
-                <X size={17} />
+                <X className="h-5 w-5" />
               </button>
+
             </div>
 
-            <div className="grid gap-3 p-5 sm:grid-cols-2">
-              {quickActions.map(
-                (action) => {
-                  const Icon = action.icon;
+            <div className="grid gap-2 p-4 sm:grid-cols-2">
 
-                  return (
-                    <button
-                      key={
-                        action.title
-                      }
-                      type="button"
-                      onClick={() => {
-                        window.location.href =
-                          action.href;
-                      }}
-                      className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/40 hover:shadow-sm"
-                    >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-blue-600 text-white shadow-sm transition group-hover:from-emerald-600 group-hover:to-blue-700">
-                        <Icon size={18} />
-                      </div>
-
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900">
-                          {
-                            action.title
-                          }
-                        </p>
-
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          {
-                            action.description
-                          }
-                        </p>
-                      </div>
-                    </button>
-                  );
+              <QuickAction
+                href="/admin/events"
+                icon={
+                  <CalendarDays className="h-5 w-5" />
                 }
-              )}
+                title="Create Event"
+                description="Add an upcoming event"
+              />
+
+              <QuickAction
+                href="/admin/team"
+                icon={
+                  <Users className="h-5 w-5" />
+                }
+                title="Add Team Member"
+                description="Grow your council profile"
+              />
+
+              <QuickAction
+                href="/admin/gallery"
+                icon={
+                  <ImagePlus className="h-5 w-5" />
+                }
+                title="Add Gallery Photo"
+                description="Showcase council moments"
+              />
+
+              <QuickAction
+                href="/admin/notices"
+                icon={
+                  <Bell className="h-5 w-5" />
+                }
+                title="Publish Notice"
+                description="Share an important update"
+              />
+
+              <QuickAction
+                href="/admin/messages"
+                icon={
+                  <MessageSquare className="h-5 w-5" />
+                }
+                title="View Messages"
+                description="Check your website inbox"
+              />
+
+              <QuickAction
+                href="/"
+                icon={
+                  <ExternalLink className="h-5 w-5" />
+                }
+                title="Open Website"
+                description="See the public website"
+              />
+
             </div>
 
-            <div className="flex justify-end border-t border-slate-100 bg-slate-50/60 px-5 py-4">
-              <button
-                type="button"
-                onClick={() =>
-                  setShowQuickActions(
-                    false
-                  )
-                }
-                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-slate-950"
-              >
-                Close
-              </button>
-            </div>
           </div>
+
         </div>
+
       )}
+
+    </main>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  description,
+  icon,
+  href,
+  loading,
+}: {
+  label: string;
+  value: number;
+  description: string;
+  icon: React.ReactNode;
+  href: string;
+  loading: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+    >
+
+      <div className="flex items-start justify-between">
+
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700 transition group-hover:bg-slate-900 group-hover:text-white">
+          {icon}
+        </div>
+
+        <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" />
+
+      </div>
+
+      <div className="mt-5">
+
+        {loading ? (
+          <div className="h-9 w-16 animate-pulse rounded-lg bg-slate-100" />
+        ) : (
+          <p className="text-3xl font-bold tracking-tight text-slate-900">
+            {value}
+          </p>
+        )}
+
+        <p className="mt-1 text-sm font-bold text-slate-700">
+          {label}
+        </p>
+
+        <p className="mt-1 text-xs text-slate-400">
+          {description}
+        </p>
+
+      </div>
+
+    </Link>
+  );
+}
+
+function DashboardCard({
+  title,
+  subtitle,
+  icon,
+  action,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="h-full rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+
+      <div className="mb-5 flex items-start justify-between gap-4">
+
+        <div className="flex items-center gap-3">
+
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+            {icon}
+          </div>
+
+          <div>
+
+            <h2 className="text-sm font-bold text-slate-900">
+              {title}
+            </h2>
+
+            <p className="mt-0.5 text-xs text-slate-400">
+              {subtitle}
+            </p>
+
+          </div>
+
+        </div>
+
+        {action}
+
+      </div>
+
+      {children}
+
+    </section>
+  );
+}
+
+function TeamRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-xl px-2 py-2 transition hover:bg-slate-50">
+
+      <span className="text-xs font-medium text-slate-500">
+        {label}
+      </span>
+
+      <span className="min-w-7 rounded-lg bg-slate-100 px-2 py-1 text-center text-xs font-bold text-slate-700">
+        {value}
+      </span>
+
+    </div>
+  );
+}
+
+function EmptyState({
+  icon,
+  title,
+  description,
+  href,
+  action,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  href: string;
+  action: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-5 py-9 text-center">
+
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-300 shadow-sm ring-1 ring-slate-100">
+        {icon}
+      </div>
+
+      <p className="mt-4 text-sm font-bold text-slate-700">
+        {title}
+      </p>
+
+      <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-slate-400">
+        {description}
+      </p>
+
+      <Link
+        href={href}
+        className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800"
+      >
+        {action}
+        <ChevronRight className="h-3.5 w-3.5" />
+      </Link>
+
+    </div>
+  );
+}
+
+function QuickAction({
+  href,
+  icon,
+  title,
+  description,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-center gap-3 rounded-2xl border border-slate-100 p-3 transition hover:border-slate-200 hover:bg-slate-50"
+    >
+
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition group-hover:bg-slate-900 group-hover:text-white">
+        {icon}
+      </div>
+
+      <div className="min-w-0 flex-1">
+
+        <p className="text-sm font-bold text-slate-900">
+          {title}
+        </p>
+
+        <p className="mt-0.5 truncate text-xs text-slate-400">
+          {description}
+        </p>
+
+      </div>
+
+      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" />
+
+    </Link>
+  );
+}
+
+function LoadingRows() {
+  return (
+    <div className="space-y-3">
+
+      {[1, 2, 3].map((item) => (
+
+        <div
+          key={item}
+          className="flex items-center gap-4 rounded-2xl bg-slate-50 p-3.5"
+        >
+
+          <div className="h-14 w-14 animate-pulse rounded-xl bg-slate-200" />
+
+          <div className="flex-1">
+
+            <div className="h-4 w-2/3 animate-pulse rounded bg-slate-200" />
+
+            <div className="mt-2 h-3 w-1/2 animate-pulse rounded bg-slate-100" />
+
+          </div>
+
+        </div>
+
+      ))}
+
     </div>
   );
 }
