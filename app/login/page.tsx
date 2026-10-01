@@ -1,10 +1,17 @@
 "use client";
 
-import { FormEvent, useEffect, useState, type ReactNode } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 
 import {
   ArrowRight,
   CheckCircle2,
+  Eye,
+  EyeOff,
   FileText,
   LayoutDashboard,
   Loader2,
@@ -22,6 +29,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -34,13 +42,11 @@ export default function LoginPage() {
   useEffect(() => {
     const html = document.documentElement;
 
-    // Remember whether the user had dark mode enabled.
-    const wasDarkMode = html.classList.contains("dark");
+    const wasDarkMode =
+      html.classList.contains("dark");
 
-    // Force light mode for admin login.
     html.classList.remove("dark");
 
-    // Restore the user's original theme when leaving /login.
     return () => {
       if (wasDarkMode) {
         html.classList.add("dark");
@@ -48,31 +54,95 @@ export default function LoginPage() {
     };
   }, []);
 
-  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+  async function handleLogin(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     setError("");
 
     if (!email.trim() || !password) {
-      setError("Please enter your email and password.");
+      setError(
+        "Please enter your email and password."
+      );
       return;
     }
 
     setLoading(true);
 
+    /*
+     * STEP 1
+     * Authenticate with Supabase.
+     */
     const { error: loginError } =
       await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
 
+    /*
+     * Do not initialize the admin session
+     * if authentication failed.
+     */
     if (loginError) {
       setLoading(false);
       setError("Invalid email or password.");
       return;
     }
 
-    window.location.href = "/admin";
+    /*
+     * STEP 2
+     * Start the secure admin session.
+     */
+    const now = Date.now();
+
+    const sessionResponse = await fetch(
+      "/api/auth/admin-session",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          startedAt: now,
+          lastActivityAt: now,
+        }),
+      }
+    );
+
+    /*
+     * If the secure admin session could not
+     * be initialized, immediately sign out.
+     */
+    if (!sessionResponse.ok) {
+      await supabase.auth.signOut();
+
+      setLoading(false);
+
+      setError(
+        "Unable to start the secure admin session. Please try again."
+      );
+
+      return;
+    }
+
+    /*
+     * Store session start time.
+     *
+     * sessionStorage survives refreshes and
+     * navigation within the same browser tab.
+     */
+    sessionStorage.setItem(
+      "tc_admin_session_started_at",
+      String(now)
+    );
+
+    /*
+     * Replace the login page rather than pushing
+     * it into browser history.
+     */
+    window.location.replace("/admin");
   }
 
   return (
@@ -113,7 +183,9 @@ export default function LoginPage() {
               lg:grid-cols-[1.05fr_0.95fr]
             "
           >
-            {/* LEFT SIDE */}
+            {/* =========================================
+                LEFT SIDE
+            ========================================== */}
             <section
               className="
                 relative
@@ -181,16 +253,17 @@ export default function LoginPage() {
                   </div>
 
                   <h1 className="text-2xl font-black leading-[1.08] tracking-tight text-slate-950 xl:text-[28px]">
-                    Everything you need to manage the{" "}
+                    Everything you need to manage{" "}
                     <span className="bg-gradient-to-r from-emerald-500 via-cyan-500 to-blue-600 bg-clip-text text-transparent">
                       Technical Council.
                     </span>
                   </h1>
 
                   <p className="mt-3 max-w-md text-[10px] leading-5 text-slate-500">
-                    A dedicated workspace for managing events, registrations,
-                    applications, notices, team information and the council
-                    website from one place.
+                    A dedicated workspace for managing
+                    events, registrations, applications,
+                    notices, team information and the
+                    council website from one place.
                   </p>
                 </div>
 
@@ -215,7 +288,9 @@ export default function LoginPage() {
                   />
 
                   <FeatureCard
-                    icon={<LayoutDashboard size={15} />}
+                    icon={
+                      <LayoutDashboard size={15} />
+                    }
                     title="Dashboard"
                     description="Stay in control"
                   />
@@ -229,6 +304,7 @@ export default function LoginPage() {
                     size={12}
                     className="text-emerald-500"
                   />
+
                   Secure administrator access
                 </div>
 
@@ -238,7 +314,9 @@ export default function LoginPage() {
               </div>
             </section>
 
-            {/* RIGHT SIDE */}
+            {/* =========================================
+                RIGHT SIDE
+            ========================================== */}
             <section
               className="
                 flex
@@ -290,8 +368,8 @@ export default function LoginPage() {
                   </h2>
 
                   <p className="mt-1.5 text-[10px] leading-4.5 text-slate-500">
-                    Sign in to access your Technical Council administration
-                    workspace.
+                    Sign in to access your Technical
+                    Council administration workspace.
                   </p>
                 </div>
 
@@ -322,7 +400,9 @@ export default function LoginPage() {
                           autoComplete="email"
                           value={email}
                           onChange={(event) =>
-                            setEmail(event.target.value)
+                            setEmail(
+                              event.target.value
+                            )
                           }
                           placeholder="admin@example.com"
                           disabled={loading}
@@ -368,11 +448,17 @@ export default function LoginPage() {
 
                         <input
                           id="password"
-                          type="password"
+                          type={
+                            showPassword
+                              ? "text"
+                              : "password"
+                          }
                           autoComplete="current-password"
                           value={password}
                           onChange={(event) =>
-                            setPassword(event.target.value)
+                            setPassword(
+                              event.target.value
+                            )
                           }
                           placeholder="Enter your password"
                           disabled={loading}
@@ -384,7 +470,7 @@ export default function LoginPage() {
                             border-slate-200
                             bg-slate-50
                             pl-8
-                            pr-3
+                            pr-10
                             text-[11px]
                             text-slate-900
                             outline-none
@@ -398,6 +484,51 @@ export default function LoginPage() {
                             disabled:opacity-60
                           "
                         />
+
+                        {/* Show / Hide Password */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowPassword(
+                              (current) =>
+                                !current
+                            )
+                          }
+                          disabled={loading}
+                          aria-label={
+                            showPassword
+                              ? "Hide password"
+                              : "Show password"
+                          }
+                          title={
+                            showPassword
+                              ? "Hide password"
+                              : "Show password"
+                          }
+                          className="
+                            absolute
+                            right-2
+                            top-1/2
+                            -translate-y-1/2
+                            rounded-md
+                            p-1
+                            text-slate-400
+                            transition
+                            hover:bg-slate-100
+                            hover:text-slate-600
+                            focus:outline-none
+                            focus:ring-2
+                            focus:ring-blue-500/20
+                            disabled:cursor-not-allowed
+                            disabled:opacity-50
+                          "
+                        >
+                          {showPassword ? (
+                            <EyeOff size={15} />
+                          ) : (
+                            <Eye size={15} />
+                          )}
+                        </button>
                       </div>
                     </div>
 

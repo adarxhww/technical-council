@@ -4155,9 +4155,42 @@ nav a.nav-link-active {
    }
 }
 
-
 /* =========================================================
    END — ADMIN PORTAL
    ========================================================= */
 
+   
+/* =========================================================
+   FOOTER SECTION — SOLID BACKGROUND
+   The gradient visible around the footer comes from the
+   page background. This section completely covers it.
+========================================================= */
+
+.site-footer-section {
+  position: relative;
+  z-index: 5;
+  width: 100%;
+  background: #f8fbff !important;
+  background-image: none !important;
+}
+
+.dark .site-footer-section {
+  background: #08090d !important;
+  background-image: none !important;
+}
+
+/* Keep the actual footer card completely solid as well */
+.site-footer {
+  background: #ffffff !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.dark .site-footer {
+  background: #171717 !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
 /*=================== End =================== */

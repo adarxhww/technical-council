@@ -1,32 +1,42 @@
 import { NextResponse } from "next/server";
+
 import { createClient } from "@/lib/supabase/server";
+
+const ADMIN_SESSION_COOKIE =
+  "tc_admin_session";
 
 export async function POST() {
   try {
-    const supabase = await createClient();
+    const supabase =
+      await createClient();
 
-    const { error } = await supabase.auth.signOut();
+    await supabase.auth.signOut();
 
-    if (error) {
-      return NextResponse.json(
-        {
-          error: error.message,
-        },
-        { status: 400 }
-      );
-    }
+    const response =
+      NextResponse.json({
+        success: true,
+      });
 
-    return NextResponse.json({
-      success: true,
-    });
-  } catch (error) {
-    console.error("Logout error:", error);
-
-    return NextResponse.json(
-      {
-        error: "Unable to log out.",
-      },
-      { status: 500 }
+    response.cookies.delete(
+      ADMIN_SESSION_COOKIE
     );
+
+    return response;
+  } catch (error) {
+    console.error(
+      "Logout error:",
+      error
+    );
+
+    const response =
+      NextResponse.json({
+        success: true,
+      });
+
+    response.cookies.delete(
+      ADMIN_SESSION_COOKIE
+    );
+
+    return response;
   }
 }

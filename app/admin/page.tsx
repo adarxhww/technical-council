@@ -284,13 +284,52 @@ export default function AdminDashboardPage() {
 
         setError("");
 
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
+        let user = null;
 
-        if (userError) {
-          throw userError;
+        /*
+         * Supabase can briefly report no session while the browser
+         * is restoring the authenticated session after login or a
+         * refresh. Read the session directly and retry briefly.
+         *
+         * AdminSessionGuard + middleware are responsible for the
+         * actual admin-session lifecycle. The dashboard should not
+         * force a logout merely because client-side auth restoration
+         * is a little late.
+         */
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+          const {
+            data: { session },
+            error: sessionError,
+          } = await supabase.auth.getSession();
+
+          if (sessionError) {
+            console.error(
+              "Dashboard session lookup failed:",
+              sessionError
+            );
+          }
+
+          if (session?.user) {
+            user = session.user;
+            break;
+          }
+
+          await new Promise((resolve) =>
+            setTimeout(resolve, 250)
+          );
+        }
+
+        /*
+         * Do not crash, redirect, or display a false session-expired
+         * error when the browser has not restored the client session
+         * yet. The auth-state listener below will retry dashboard
+         * loading when Supabase emits INITIAL_SESSION/SIGNED_IN.
+         */
+
+        if (!user) {
+          setLoading(false);
+          setRefreshing(false);
+          return;
         }
 
         const profilePromise = user
@@ -400,41 +439,46 @@ export default function AdminDashboardPage() {
 
         const errors: string[] = [];
 
-        if (profileResult.error) {
-          errors.push("profile");
-        }
+        const recordQueryError = (
+          label: string,
+          queryError: { message?: string; code?: string | null } | null
+        ) => {
+          if (!queryError) {
+            return;
+          }
 
-        if (noticesResult.error) {
-          errors.push("notices");
-        }
+          const code = queryError.code
+            ? ` [${queryError.code}]`
+            : "";
 
-        if (eventsResult.error) {
-          errors.push("events");
-        }
+          errors.push(
+            `${label}: ${queryError.message || "Unknown Supabase error"}${code}`
+          );
 
-        if (teamResult.error) {
-          errors.push("team");
-        }
+          console.error(
+            `Dashboard Supabase query failed (${label}):`,
+            queryError
+          );
+        };
 
-        if (unreadResult.error) {
-          errors.push("messages");
-        }
-
-        if (messagesResult.error) {
-          errors.push("recent messages");
-        }
-
-        if (applicationsResult.error) {
-          errors.push("recruitment applications");
-        }
-
-        if (individualRegistrationsResult.error) {
-          errors.push("individual registrations");
-        }
-
-        if (teamRegistrationsResult.error) {
-          errors.push("team registrations");
-        }
+        recordQueryError("admin profile", profileResult.error);
+        recordQueryError("notices", noticesResult.error);
+        recordQueryError("events", eventsResult.error);
+        recordQueryError("team", teamResult.error);
+        recordQueryError("unread messages", unreadResult.error);
+        recordQueryError("recent messages", messagesResult.error);
+        recordQueryError(
+          "recruitment applications",
+          applicationsResult.error
+        );
+        recordQueryError(
+          "individual registrations",
+          individualRegistrationsResult.error
+        );
+        recordQueryError(
+          "team registrations",
+          teamRegistrationsResult.error
+        );
 
         if (profileResult.data) {
           setAdmin(
@@ -498,8 +542,9 @@ export default function AdminDashboardPage() {
               );
 
           if (registrationPagesResult.error) {
-            errors.push(
-              "registration pages"
+            recordQueryError(
+              "registration pages",
+              registrationPagesResult.error
             );
           } else {
             registrationPages =
@@ -841,7 +886,7 @@ export default function AdminDashboardPage() {
 
         if (errors.length > 0) {
           setError(
-            "Some dashboard data could not be loaded. The available information is still shown."
+            `Some dashboard data could not be loaded. ${errors.join(" • ")}`
           );
         }
       } catch (err) {
@@ -862,7 +907,123 @@ export default function AdminDashboardPage() {
   );
 
   useEffect(() => {
-    void loadDashboard();
+    let mounted = true;
+    let initializationFinished = false;
+
+    /*
+     * Register the auth listener first so that a session restored
+     * immediately after the page mounts cannot be missed.
+     */
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (!mounted) {
+          return;
+        }
+
+        if (
+          (event === "SIGNED_IN" ||
+            event === "INITIAL_SESSION" ||
+            event === "TOKEN_REFRESHED") &&
+          session?.user
+        ) {
+          /*
+           * Supabase recommends not starting another auth request
+           * synchronously inside the auth-state callback. Queue it
+           * for the next task instead.
+           */
+          window.setTimeout(() => {
+            if (mounted) {
+              void loadDashboard();
+            }
+          }, 0);
+
+          return;
+        }
+
+        /*
+         * Only an actual Supabase sign-out should send
+         * the user to the login page from this listener.
+         */
+        if (event === "SIGNED_OUT") {
+          window.location.replace("/login");
+        }
+      }
+    );
+
+    /*
+     * Load immediately if a session is already available.
+     *
+     * The previous implementation checked getSession() only once.
+     * Right after login/refresh, Supabase may still be restoring the
+     * browser session. In that case the dashboard never called
+     * loadDashboard(), which made every card appear empty.
+     *
+     * Retry the session lookup for a short, bounded period so the
+     * dashboard reliably waits for the client session.
+     */
+    async function initializeDashboard() {
+      try {
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+          if (!mounted) {
+            return;
+          }
+
+          const {
+            data: { session },
+            error: sessionError,
+          } = await supabase.auth.getSession();
+
+          if (sessionError) {
+            console.error(
+              "Dashboard session lookup failed:",
+              sessionError
+            );
+          }
+
+          if (session?.user) {
+            initializationFinished = true;
+            void loadDashboard();
+            return;
+          }
+
+          await new Promise((resolve) =>
+            window.setTimeout(resolve, 250)
+          );
+        }
+
+        if (mounted && !initializationFinished) {
+          /*
+           * Do not show an authentication error here. Middleware and
+           * AdminSessionGuard own the admin-session lifecycle. If the
+           * session is restored later, INITIAL_SESSION/TOKEN_REFRESHED
+           * will trigger loadDashboard().
+           */
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error(
+          "Dashboard session initialization error:",
+          err
+        );
+
+        if (mounted) {
+          setLoading(false);
+          console.error(
+            "Dashboard session initialization failed; waiting for auth state:",
+            err
+          );
+        }
+      }
+    }
+
+    void initializeDashboard();
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [loadDashboard]);
 
   /*
