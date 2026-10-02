@@ -139,18 +139,25 @@ export default function TeamPage() {
       })
     );
 
-  function renderPersonCard(member: TeamMember) {
-    return (
-      <PersonCard
-        key={member.id}
-        name={member.name}
-        role={member.role}
-        imageUrl={member.photo || undefined}
-        linkedin={member.linkedin || undefined}
-        email={member.email || undefined}
-      />
-    );
-  }
+function renderPersonCard(member: TeamMember) {
+  const displayRole =
+    member.section === "secretaries" ||
+    member.section === "co_secretaries" ||
+    member.section === "general_members"
+      ? member.team
+      : member.role;
+
+  return (
+    <PersonCard
+      key={member.id}
+      name={member.name}
+      role={displayRole}
+      imageUrl={member.photo || undefined}
+      linkedin={member.linkedin || undefined}
+      email={member.email || undefined}
+    />
+  );
+}
 
   return (
     <main className="container pb-20 pt-16">

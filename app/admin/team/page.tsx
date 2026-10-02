@@ -100,7 +100,7 @@ const TEAM_OPTIONS = [
 const ROLE_OPTIONS = [
   "Director",
   "Technical Council Convenor",
-  "Head Secretary",
+  "Head Senior Secretary",
   "Senior Secretary",
   "Secretary",
   "Co-Secretary",
@@ -260,9 +260,7 @@ export default function AdminTeamPage() {
         member.team.toLowerCase().includes(query) ||
         member.year.toLowerCase().includes(query) ||
         member.email.toLowerCase().includes(query) ||
-        (member.contact_no ?? "")
-          .toLowerCase()
-          .includes(query);
+        (member.contact_no ?? "").toLowerCase().includes(query);
 
       const matchesSection =
         sectionFilter === "all" ||
@@ -270,23 +268,12 @@ export default function AdminTeamPage() {
 
       const matchesPublished =
         publishedFilter === "all" ||
-        (publishedFilter === "published" &&
-          member.published) ||
-        (publishedFilter === "draft" &&
-          !member.published);
+        (publishedFilter === "published" && member.published) ||
+        (publishedFilter === "draft" && !member.published);
 
-      return (
-        matchesSearch &&
-        matchesSection &&
-        matchesPublished
-      );
+      return matchesSearch && matchesSection && matchesPublished;
     });
-  }, [
-    members,
-    search,
-    sectionFilter,
-    publishedFilter,
-  ]);
+  }, [members, search, sectionFilter, publishedFilter]);
 
   const stats = useMemo(() => {
     const published = members.filter(
@@ -296,8 +283,7 @@ export default function AdminTeamPage() {
     const sectionCounts = SECTION_OPTIONS.reduce(
       (acc, section) => {
         acc[section.value] = members.filter(
-          (member) =>
-            member.section === section.value
+          (member) => member.section === section.value
         ).length;
 
         return acc;
@@ -333,8 +319,7 @@ export default function AdminTeamPage() {
       photo: member.photo ?? "",
       linkedin: member.linkedin ?? "",
       contact_no: member.contact_no ?? "",
-      section:
-        member.section ?? "general_members",
+      section: member.section ?? "general_members",
       published: Boolean(member.published),
     });
 
@@ -363,7 +348,7 @@ export default function AdminTeamPage() {
     }));
   }
 
-  async function handlePhotoUpload(
+  function handlePhotoUpload(
     event: React.ChangeEvent<HTMLInputElement>
   ) {
     const file = event.target.files?.[0];
@@ -379,9 +364,7 @@ export default function AdminTeamPage() {
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      setError(
-        "Image size must be 5 MB or smaller."
-      );
+      setError("Image size must be 5 MB or smaller.");
       event.target.value = "";
       return;
     }
@@ -396,9 +379,7 @@ export default function AdminTeamPage() {
     };
 
     reader.onerror = () => {
-      setError(
-        "Unable to read the selected image."
-      );
+      setError("Unable to read the selected image.");
     };
 
     reader.readAsDataURL(file);
@@ -428,9 +409,7 @@ export default function AdminTeamPage() {
     }
 
     if (!isValidEmail(email)) {
-      setError(
-        "Please enter a valid email address."
-      );
+      setError("Please enter a valid email address.");
       return;
     }
 
@@ -445,40 +424,35 @@ export default function AdminTeamPage() {
       photo: form.photo,
       linkedin,
       section: form.section,
-
-      // Contact number is only applicable
-      // to Institutional Leadership.
       contact_no:
         form.section === "institutional_leadership"
           ? contactNo || null
           : null,
-
       published: form.published,
     };
 
     if (editingMember) {
-      const { data, error: updateError } =
-        await supabase
-          .from("tc_team")
-          .update(basePayload)
-          .eq("id", editingMember.id)
-          .select(`
-            id,
-            name,
-            role,
-            team,
-            year,
-            email,
-            photo,
-            linkedin,
-            section,
-            contact_no,
-            published,
-            display_order,
-            created_at,
-            updated_at
-          `)
-          .single();
+      const { data, error: updateError } = await supabase
+        .from("tc_team")
+        .update(basePayload)
+        .eq("id", editingMember.id)
+        .select(`
+          id,
+          name,
+          role,
+          team,
+          year,
+          email,
+          photo,
+          linkedin,
+          section,
+          contact_no,
+          published,
+          display_order,
+          created_at,
+          updated_at
+        `)
+        .single();
 
       if (updateError) {
         console.error(
@@ -499,15 +473,12 @@ export default function AdminTeamPage() {
         )
       );
 
-      setSuccess(
-        "Team member updated successfully."
-      );
+      setSuccess("Team member updated successfully.");
     } else {
       const nextDisplayOrder =
         members
           .filter(
-            (member) =>
-              member.section === form.section
+            (member) => member.section === form.section
           )
           .reduce(
             (highest, member) =>
@@ -523,74 +494,9 @@ export default function AdminTeamPage() {
         display_order: nextDisplayOrder,
       };
 
-      const { data, error: insertError } =
-        await supabase
-          .from("tc_team")
-          .insert(insertPayload)
-          .select(`
-            id,
-            name,
-            role,
-            team,
-            year,
-            email,
-            photo,
-            linkedin,
-            section,
-            contact_no,
-            published,
-            display_order,
-            created_at,
-            updated_at
-          `)
-          .single();
-
-      if (insertError) {
-        console.error(
-          "Failed to create Technical Council team member:",
-          insertError
-        );
-
-        setError(insertError.message);
-        setSaving(false);
-        return;
-      }
-
-      setMembers((current) => [
-        ...current,
-        data as TeamMember,
-      ]);
-
-      setSuccess(
-        "Team member added successfully."
-      );
-    }
-
-    setSaving(false);
-
-    setTimeout(() => {
-      setIsModalOpen(false);
-      setEditingMember(null);
-      setForm(EMPTY_FORM);
-      setSuccess("");
-    }, 600);
-  }
-
-  async function togglePublished(
-    member: TeamMember
-  ) {
-    setError("");
-    setSuccess("");
-
-    const nextPublished = !member.published;
-
-    const { data, error: updateError } =
-      await supabase
+      const { data, error: insertError } = await supabase
         .from("tc_team")
-        .update({
-          published: nextPublished,
-        })
-        .eq("id", member.id)
+        .insert(insertPayload)
         .select(`
           id,
           name,
@@ -608,6 +514,65 @@ export default function AdminTeamPage() {
           updated_at
         `)
         .single();
+
+      if (insertError) {
+        console.error(
+          "Failed to create Technical Council team member:",
+          insertError
+        );
+
+        setError(insertError.message);
+        setSaving(false);
+        return;
+      }
+
+      setMembers((current) => [
+        ...current,
+        data as TeamMember,
+      ]);
+
+      setSuccess("Team member added successfully.");
+    }
+
+    setSaving(false);
+
+    setTimeout(() => {
+      setIsModalOpen(false);
+      setEditingMember(null);
+      setForm(EMPTY_FORM);
+      setSuccess("");
+    }, 600);
+  }
+
+  async function togglePublished(member: TeamMember) {
+    setError("");
+    setSuccess("");
+
+    const nextPublished = !member.published;
+
+    const { data, error: updateError } = await supabase
+      .from("tc_team")
+      .update({
+        published: nextPublished,
+      })
+      .eq("id", member.id)
+      .select(`
+        id,
+        name,
+        role,
+        team,
+        year,
+        email,
+        photo,
+        linkedin,
+        section,
+        contact_no,
+        published,
+        display_order,
+        created_at,
+        updated_at
+      `)
+      .single();
 
     if (updateError) {
       console.error(
@@ -636,9 +601,7 @@ export default function AdminTeamPage() {
     setTimeout(() => setSuccess(""), 2000);
   }
 
-  async function deleteMember(
-    member: TeamMember
-  ) {
+  async function deleteMember(member: TeamMember) {
     const confirmed = window.confirm(
       `Delete ${member.name} from the Technical Council team?\n\nThis action cannot be undone.`
     );
@@ -650,11 +613,10 @@ export default function AdminTeamPage() {
     setError("");
     setSuccess("");
 
-    const { error: deleteError } =
-      await supabase
-        .from("tc_team")
-        .delete()
-        .eq("id", member.id);
+    const { error: deleteError } = await supabase
+      .from("tc_team")
+      .delete()
+      .eq("id", member.id);
 
     if (deleteError) {
       console.error(
@@ -667,14 +629,10 @@ export default function AdminTeamPage() {
     }
 
     setMembers((current) =>
-      current.filter(
-        (item) => item.id !== member.id
-      )
+      current.filter((item) => item.id !== member.id)
     );
 
-    setSuccess(
-      `${member.name} was deleted.`
-    );
+    setSuccess(`${member.name} was deleted.`);
 
     setTimeout(() => setSuccess(""), 2000);
   }
@@ -684,9 +642,7 @@ export default function AdminTeamPage() {
     direction: "up" | "down"
   ) {
     const sameSection = members
-      .filter(
-        (item) => item.section === member.section
-      )
+      .filter((item) => item.section === member.section)
       .sort(
         (a, b) =>
           (a.display_order ?? 0) -
@@ -702,9 +658,7 @@ export default function AdminTeamPage() {
     }
 
     const targetIndex =
-      direction === "up"
-        ? index - 1
-        : index + 1;
+      direction === "up" ? index - 1 : index + 1;
 
     if (
       targetIndex < 0 ||
@@ -715,11 +669,8 @@ export default function AdminTeamPage() {
 
     const target = sameSection[targetIndex];
 
-    const currentOrder =
-      member.display_order ?? 0;
-
-    const targetOrder =
-      target.display_order ?? 0;
+    const currentOrder = member.display_order ?? 0;
+    const targetOrder = target.display_order ?? 0;
 
     setError("");
 
@@ -754,7 +705,6 @@ export default function AdminTeamPage() {
   return (
     <div className="min-h-screen px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto w-full max-w-[1500px]">
-
         {/* HEADER */}
         <div className="mb-8">
           <div className="mb-4">
@@ -833,7 +783,6 @@ export default function AdminTeamPage() {
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Total Members
             </p>
-
             <p className="mt-2 text-3xl font-bold text-slate-950">
               {stats.total}
             </p>
@@ -843,7 +792,6 @@ export default function AdminTeamPage() {
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Published
             </p>
-
             <p className="mt-2 text-3xl font-bold text-emerald-600">
               {stats.published}
             </p>
@@ -853,7 +801,6 @@ export default function AdminTeamPage() {
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Drafts / Hidden
             </p>
-
             <p className="mt-2 text-3xl font-bold text-slate-950">
               {stats.drafts}
             </p>
@@ -863,12 +810,8 @@ export default function AdminTeamPage() {
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Leadership
             </p>
-
             <p className="mt-2 text-3xl font-bold text-blue-600">
-              {
-                stats.sectionCounts
-                  .institutional_leadership
-              }
+              {stats.sectionCounts.institutional_leadership}
             </p>
           </div>
         </div>
@@ -893,11 +836,7 @@ export default function AdminTeamPage() {
               </p>
 
               <p className="mt-1 text-2xl font-bold text-slate-950">
-                {
-                  stats.sectionCounts[
-                    section.value
-                  ]
-                }
+                {stats.sectionCounts[section.value]}
               </p>
 
               <p className="mt-1 text-xs text-slate-500">
@@ -937,9 +876,7 @@ export default function AdminTeamPage() {
               }
               className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-blue-400 focus:bg-white"
             >
-              <option value="all">
-                All Sections
-              </option>
+              <option value="all">All Sections</option>
 
               {SECTION_OPTIONS.map((section) => (
                 <option
@@ -963,17 +900,9 @@ export default function AdminTeamPage() {
               }
               className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-blue-400 focus:bg-white"
             >
-              <option value="all">
-                All Status
-              </option>
-
-              <option value="published">
-                Published
-              </option>
-
-              <option value="draft">
-                Draft / Hidden
-              </option>
+              <option value="all">All Status</option>
+              <option value="published">Published</option>
+              <option value="draft">Draft / Hidden</option>
             </select>
 
             <button
@@ -995,8 +924,7 @@ export default function AdminTeamPage() {
               </h2>
 
               <p className="mt-1 text-xs text-slate-500">
-                Showing{" "}
-                {filteredMembers.length} of{" "}
+                Showing {filteredMembers.length} of{" "}
                 {members.length} members
               </p>
             </div>
@@ -1062,7 +990,11 @@ export default function AdminTeamPage() {
                       <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-400">
                         Role
                       </th>
-                   
+
+                      <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-400">
+                        Team
+                      </th>
+
                       <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-400">
                         Year
                       </th>
@@ -1096,8 +1028,7 @@ export default function AdminTeamPage() {
                                 {member.name
                                   .trim()
                                   .charAt(0)
-                                  .toUpperCase() ||
-                                  "?"}
+                                  .toUpperCase() || "?"}
                               </div>
                             )}
 
@@ -1188,10 +1119,7 @@ export default function AdminTeamPage() {
                             <button
                               type="button"
                               onClick={() =>
-                                moveMember(
-                                  member,
-                                  "up"
-                                )
+                                moveMember(member, "up")
                               }
                               title="Move up"
                               className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
@@ -1202,10 +1130,7 @@ export default function AdminTeamPage() {
                             <button
                               type="button"
                               onClick={() =>
-                                moveMember(
-                                  member,
-                                  "down"
-                                )
+                                moveMember(member, "down")
                               }
                               title="Move down"
                               className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
@@ -1261,8 +1186,7 @@ export default function AdminTeamPage() {
                           {member.name
                             .trim()
                             .charAt(0)
-                            .toUpperCase() ||
-                            "?"}
+                            .toUpperCase() || "?"}
                         </div>
                       )}
 
@@ -1274,8 +1198,7 @@ export default function AdminTeamPage() {
                             </h3>
 
                             <p className="mt-1 text-sm text-slate-500">
-                              {member.role ||
-                                "No role"}
+                              {member.role || "No role"}
                             </p>
                           </div>
 
@@ -1347,8 +1270,7 @@ export default function AdminTeamPage() {
                               </span>
 
                               <p className="mt-1 text-slate-600">
-                                {member.contact_no ||
-                                  "—"}
+                                {member.contact_no || "—"}
                               </p>
                             </div>
                           )}
@@ -1358,10 +1280,7 @@ export default function AdminTeamPage() {
                           <button
                             type="button"
                             onClick={() =>
-                              moveMember(
-                                member,
-                                "up"
-                              )
+                              moveMember(member, "up")
                             }
                             className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
                           >
@@ -1371,10 +1290,7 @@ export default function AdminTeamPage() {
                           <button
                             type="button"
                             onClick={() =>
-                              moveMember(
-                                member,
-                                "down"
-                              )
+                              moveMember(member, "down")
                             }
                             className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
                           >
@@ -1418,15 +1334,12 @@ export default function AdminTeamPage() {
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"
           onMouseDown={(event) => {
-            if (
-              event.target === event.currentTarget
-            ) {
+            if (event.target === event.currentTarget) {
               closeModal();
             }
           }}
         >
           <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-
             {/* MODAL HEADER */}
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
               <div>
@@ -1462,7 +1375,6 @@ export default function AdminTeamPage() {
               )}
 
               <div className="grid gap-5 md:grid-cols-2">
-
                 {/* NAME */}
                 <div className="md:col-span-2">
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
@@ -1498,23 +1410,21 @@ export default function AdminTeamPage() {
                     }
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
                   >
-                    {SECTION_OPTIONS.map(
-                      (section) => (
-                        <option
-                          key={section.value}
-                          value={section.value}
-                        >
-                          {section.label} —{" "}
-                          {section.subtitle}
-                        </option>
-                      )
-                    )}
+                    {SECTION_OPTIONS.map((section) => (
+                      <option
+                        key={section.value}
+                        value={section.value}
+                      >
+                        {section.label} —{" "}
+                        {section.subtitle}
+                      </option>
+                    ))}
                   </select>
 
                   <p className="mt-2 text-xs text-slate-400">
-                    This determines which section
-                    of the public Team page this
-                    member appears in.
+                    This determines which section of the
+                    public Team page this member appears
+                    in.
                   </p>
                 </div>
 
@@ -1638,7 +1548,7 @@ export default function AdminTeamPage() {
                   </div>
                 </div>
 
-                {/* CONTACT NO. — INSTITUTIONAL LEADERSHIP ONLY */}
+                {/* CONTACT NO. */}
                 {form.section ===
                   "institutional_leadership" && (
                   <div>
@@ -1658,7 +1568,6 @@ export default function AdminTeamPage() {
                       placeholder="+91 XXXXX XXXXX"
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
                     />
-                    
                   </div>
                 )}
 
@@ -1721,9 +1630,7 @@ export default function AdminTeamPage() {
                           ref={fileInputRef}
                           type="file"
                           accept="image/*"
-                          onChange={
-                            handlePhotoUpload
-                          }
+                          onChange={handlePhotoUpload}
                           className="hidden"
                         />
 
@@ -1742,10 +1649,7 @@ export default function AdminTeamPage() {
                           <button
                             type="button"
                             onClick={() =>
-                              updateForm(
-                                "photo",
-                                ""
-                              )
+                              updateForm("photo", "")
                             }
                             className="ml-2 inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100"
                           >
@@ -1755,9 +1659,8 @@ export default function AdminTeamPage() {
                         )}
 
                         <p className="mt-2 text-xs text-slate-400">
-                          JPG, PNG, WEBP or other
-                          image format. Maximum 5
-                          MB.
+                          JPG, PNG, WEBP or other image
+                          format. Maximum 5 MB.
                         </p>
                       </div>
                     </div>
@@ -1785,9 +1688,9 @@ export default function AdminTeamPage() {
                       </span>
 
                       <span className="mt-1 block text-xs leading-5 text-slate-500">
-                        When enabled, this member
-                        will be visible on the public
-                        Team page.
+                        When enabled, this member will
+                        be visible on the public Team
+                        page.
                       </span>
                     </span>
                   </label>

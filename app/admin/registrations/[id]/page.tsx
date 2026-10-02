@@ -1422,7 +1422,6 @@ export default function RegistrationMonitoringPage({
                         "Team",
                         "Leader",
                         "Email",
-                        "Members",
                         "Registered",
                         "Action",
                       ].map(
@@ -1491,17 +1490,6 @@ export default function RegistrationMonitoringPage({
                                 registration.leader_email
                               )}
                             </a>
-                          </td>
-
-                          <td className="px-5 py-4">
-                            <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                              {registration.members.length}{" "}
-                              member
-                              {registration.members
-                                .length === 1
-                                ? ""
-                                : "s"}
-                            </span>
                           </td>
 
                           <td className="px-5 py-4 text-xs text-slate-500 dark:text-slate-400">
@@ -1640,21 +1628,6 @@ export default function RegistrationMonitoringPage({
                       )}
                     />
                   </DetailSection>
-
-                  <CustomFieldsSection
-                    title="Additional Information"
-                    fields={fields.filter(
-                      (
-                        field: RegistrationField
-                      ) =>
-                        field.field_scope ===
-                        "individual"
-                    )}
-                    values={
-                      selectedRegistration.data
-                        .form_data
-                    }
-                  />
                 </div>
               )}
 
@@ -1690,22 +1663,7 @@ export default function RegistrationMonitoringPage({
                       )}
                     />
                   </DetailSection>
-
-                  <CustomFieldsSection
-                    title="Team Information — Additional Fields"
-                    fields={fields.filter(
-                      (
-                        field: RegistrationField
-                      ) =>
-                        field.field_scope ===
-                        "team"
-                    )}
-                    values={
-                      selectedRegistration.data
-                        .form_data
-                    }
-                  />
-
+                  
                   <DetailSection title="Team Leader">
                     <DetailRow
                       label="Name"
@@ -1747,21 +1705,6 @@ export default function RegistrationMonitoringPage({
                       }
                     />
                   </DetailSection>
-
-                  <CustomFieldsSection
-                    title="Team Leader — Additional Information"
-                    fields={fields.filter(
-                      (
-                        field: RegistrationField
-                      ) =>
-                        field.field_scope ===
-                        "team_leader"
-                    )}
-                    values={
-                      selectedRegistration.data
-                        .leader_form_data
-                    }
-                  />
 
                   <div>
                     <div className="mb-3 flex items-center gap-2">
@@ -1837,19 +1780,7 @@ export default function RegistrationMonitoringPage({
                               </div>
 
                               <div className="mt-4">
-                                <CustomFieldsSection
-                                  title="Additional Information"
-                                  fields={fields.filter(
-                                    (
-                                      field: RegistrationField
-                                    ) =>
-                                      field.field_scope ===
-                                      "team_member"
-                                  )}
-                                  values={
-                                    member.form_data
-                                  }
-                                />
+                                
                               </div>
                             </div>
                           )
