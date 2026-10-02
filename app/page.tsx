@@ -298,24 +298,21 @@ function HomepageGallery({
         </div>
       )}
 
-      {/* =====================================================
-          CAMERA OVERLAY
-          Transparent in both light and dark mode
-      ===================================================== */}
-<div
-  className="absolute bottom-[-35px] right-[-20px] z-20 flex h-56 w-56 rotate-[-8deg] items-center justify-center rounded-[55px] border border-white/25 shadow-2xl transition duration-500 group-hover:rotate-0 group-hover:scale-105"
-  style={{
-    backgroundColor: "rgba(255, 255, 255, 0.30)",
-    backdropFilter: "none",
-    WebkitBackdropFilter: "none",
-  }}
->
-  <Camera
-    size={75}
-    strokeWidth={1}
-    className="relative z-10 text-blue-400/80"
-  />
-</div>
+      {/* CAMERA OVERLAY */}
+      <div
+        className="absolute bottom-[-35px] right-[-20px] z-20 flex h-56 w-56 rotate-[-8deg] items-center justify-center rounded-[55px] border border-white/25 shadow-2xl transition duration-500 group-hover:rotate-0 group-hover:scale-105"
+        style={{
+          backgroundColor: "rgba(255, 255, 255, 0.30)",
+          backdropFilter: "none",
+          WebkitBackdropFilter: "none",
+        }}
+      >
+        <Camera
+          size={75}
+          strokeWidth={1}
+          className="relative z-10 text-blue-400/80"
+        />
+      </div>
 
       <div className="absolute bottom-6 right-7 z-20 max-w-sm text-right text-sm text-slate-600 dark:text-slate-300">
         Explore the moments that make our community what it
@@ -353,10 +350,11 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#f6fbfc] text-slate-950 dark:bg-[#08090d] dark:text-slate-100">
+    <main className="min-h-screen w-full overflow-x-hidden overflow-y-visible bg-[#f6fbfc] text-slate-950 dark:bg-[#08090d] dark:text-slate-100">
       {/* =========================================================
           GLOBAL BACKGROUND
       ========================================================= */}
+
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-[#f6fbfc] dark:bg-[#08090d]">
         {/* Blue glow */}
         <div className="absolute left-[-180px] top-[100px] h-[520px] w-[520px] rounded-full bg-blue-300/35 blur-[130px] dark:bg-blue-700/15" />
@@ -377,15 +375,20 @@ export default function Home() {
       {/* =========================================================
           HERO
       ========================================================= */}
-      <section className="relative mx-auto max-w-7xl px-5 pb-12 pt-8 lg:px-8 lg:pb-16 lg:pt-10">
+
+      <section className="relative mx-auto w-full max-w-7xl overflow-visible px-5 pb-12 pt-8 lg:px-8 lg:pb-16 lg:pt-10">
         {/* Hero ambient background */}
+
         <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[760px] overflow-hidden">
           <div className="absolute left-[5%] top-[10%] h-[350px] w-[350px] rounded-full bg-blue-400/20 blur-[125px] dark:bg-blue-500/10" />
+
           <div className="absolute right-[5%] top-[10%] h-[400px] w-[400px] rounded-full bg-emerald-400/20 blur-[130px] dark:bg-emerald-500/10" />
+
           <div className="absolute left-[42%] top-[30%] h-[300px] w-[300px] rounded-full bg-cyan-300/20 blur-[110px] dark:bg-cyan-500/10" />
         </div>
 
         {/* Subtle technical grid */}
+
         <div
           className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[650px] opacity-[0.25] dark:opacity-[0.1]"
           style={{
@@ -402,39 +405,53 @@ export default function Home() {
         {/* =====================================================
             FULL HERO GLASS RECTANGLE
         ===================================================== */}
-        <div className="relative overflow-hidden rounded-[40px] border border-white/75 bg-white/35 p-2 shadow-[0_30px_100px_rgba(45,100,130,0.12)] backdrop-blur-2xl dark:border-white/[0.08] dark:bg-slate-900/30 dark:shadow-[0_30px_100px_rgba(0,0,0,0.25)]">
+
+        <div className="relative w-full min-w-0 overflow-hidden rounded-[40px] border border-white/75 bg-white/35 p-2 shadow-[0_30px_100px_rgba(45,100,130,0.12)] backdrop-blur-2xl dark:border-white/[0.08] dark:bg-slate-900/30 dark:shadow-[0_30px_100px_rgba(0,0,0,0.25)]">
           {/* Glass rectangle internal glow */}
+
           <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[38px]">
             <div className="absolute left-[-100px] top-[-120px] h-[340px] w-[340px] rounded-full bg-blue-400/20 blur-[110px]" />
+
             <div className="absolute right-[-100px] top-[-80px] h-[360px] w-[360px] rounded-full bg-emerald-400/20 blur-[115px]" />
+
             <div className="absolute bottom-[-120px] left-[35%] h-[320px] w-[320px] rounded-full bg-cyan-300/15 blur-[110px]" />
           </div>
 
-          <div className="relative rounded-[34px] border border-white/55 bg-white/25 px-5 py-7 backdrop-blur-xl dark:border-white/[0.05] dark:bg-slate-950/20 sm:px-8 sm:py-9 lg:px-10 lg:py-10">
-            <div className="grid items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="relative w-full min-w-0 rounded-[34px] border border-white/55 bg-white/25 px-5 py-7 backdrop-blur-xl dark:border-white/[0.05] dark:bg-slate-950/20 sm:px-8 sm:py-9 lg:px-10 lg:py-10">
+            <div className="grid min-w-0 items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
               {/* =================================================
                   LEFT HERO CONTENT
               ================================================= */}
-              <div className="relative">
+
+              <div className="relative min-w-0">
                 {/* Location pill */}
-                <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/75 px-4 py-2 text-xs font-semibold text-slate-600 shadow-[0_8px_30px_rgba(70,80,120,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/65 dark:text-slate-300 sm:text-sm">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
-                  Rajkiya Engineering College, Ambedkar Nagar
+
+                <div className="mb-5 inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border border-white/80 bg-white/75 px-4 py-2 text-xs font-semibold leading-5 text-slate-600 shadow-[0_8px_30px_rgba(70,80,120,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/65 dark:text-slate-300 sm:text-sm">
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
+
+                  <span>
+                    Rajkiya Engineering College, Ambedkar Nagar
+                  </span>
                 </div>
 
                 {/* Heading */}
+
                 <h1 className="max-w-3xl text-4xl font-bold leading-[0.98] tracking-[-0.045em] text-slate-950 dark:text-white sm:text-6xl lg:text-7xl">
                   Where
+
                   <span className="relative block bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-500 bg-clip-text pb-3 text-transparent">
                     technology
                   </span>
+
                   meets{" "}
+
                   <span className="tc-innovation">
                     innovation.
                   </span>
                 </h1>
 
                 {/* Gradient accent */}
+
                 <div className="mt-2 flex items-center gap-2">
                   <span className="h-[3px] w-11 rounded-full bg-blue-500" />
                   <span className="h-[3px] w-7 rounded-full bg-cyan-500" />
@@ -442,6 +459,7 @@ export default function Home() {
                 </div>
 
                 {/* Description */}
+
                 <p className="mt-5 max-w-xl text-base leading-7 text-slate-600 dark:text-slate-400 sm:text-lg">
                   <span className="font-semibold text-slate-800 dark:text-slate-200">
                     Ideas start here. Skills grow here. Innovation
@@ -453,6 +471,7 @@ export default function Home() {
                 </p>
 
                 {/* CTA */}
+
                 <div className="mt-7 flex flex-wrap gap-3">
                   <Link
                     href="/events"
@@ -478,10 +497,14 @@ export default function Home() {
                   </Link>
                 </div>
 
-                {/* Mini stats */}
-                <div className="mt-8 flex flex-nowrap gap-3">
+                {/* =================================================
+                    MINI STATS
+                ================================================= */}
+
+                <div className="mt-8 flex w-full min-w-0 gap-3">
                   {/* Members */}
-                  <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-white/80 bg-white/65 px-3 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 sm:flex-none sm:px-4">
+
+                  <div className="flex min-w-0 flex-1 basis-0 items-center gap-2 rounded-2xl border border-white/80 bg-white/65 px-3 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 sm:flex-none sm:px-4">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
                       <Users size={15} />
                     </div>
@@ -498,7 +521,8 @@ export default function Home() {
                   </div>
 
                   {/* Events */}
-                  <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-white/80 bg-white/65 px-3 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 sm:flex-none sm:px-4">
+
+                  <div className="flex min-w-0 flex-1 basis-0 items-center gap-2 rounded-2xl border border-white/80 bg-white/65 px-3 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 sm:flex-none sm:px-4">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-400">
                       <CalendarDays size={15} />
                     </div>
@@ -515,7 +539,8 @@ export default function Home() {
                   </div>
 
                   {/* Community */}
-                  <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-white/80 bg-white/65 px-3 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 sm:flex-none sm:px-4">
+
+                  <div className="flex min-w-0 flex-1 basis-0 items-center gap-2 rounded-2xl border border-white/80 bg-white/65 px-3 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 sm:flex-none sm:px-4">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
                       <Sparkles size={15} />
                     </div>
@@ -536,28 +561,33 @@ export default function Home() {
               {/* =================================================
                   RIGHT HERO VISUAL
               ================================================= */}
-              <div className="relative">
+
+              <div className="relative min-w-0">
                 {/* Outer glow */}
+
                 <div className="pointer-events-none absolute -inset-8 rounded-[60px] bg-gradient-to-br from-blue-400/20 via-cyan-300/15 to-emerald-400/20 blur-3xl dark:from-blue-500/10 dark:via-cyan-500/10 dark:to-emerald-500/10" />
 
                 {/* Gradient border */}
-                <div className="relative rounded-[34px] bg-gradient-to-br from-blue-300/50 via-cyan-300/30 to-emerald-300/50 p-[1px] shadow-[0_30px_90px_rgba(30,120,130,0.14)] dark:from-blue-500/20 dark:via-cyan-500/15 dark:to-emerald-500/20">
-                  <GlassCard className="relative min-h-[390px] overflow-hidden rounded-[33px] p-5 sm:min-h-[410px]">
+
+                <div className="relative w-full min-w-0 rounded-[34px] bg-gradient-to-br from-blue-300/50 via-cyan-300/30 to-emerald-300/50 p-[1px] shadow-[0_30px_90px_rgba(30,120,130,0.14)] dark:from-blue-500/20 dark:via-cyan-500/15 dark:to-emerald-500/20">
+                  <GlassCard className="relative min-h-[330px] w-full max-w-full overflow-hidden rounded-[33px] p-4 sm:min-h-[410px] sm:p-5">
                     {/* Decorative lights */}
+
                     <div className="absolute right-[-50px] top-[-50px] h-52 w-52 rounded-full bg-emerald-300/25 blur-[75px] dark:bg-emerald-700/10" />
 
                     <div className="absolute bottom-[-60px] left-[-50px] h-56 w-56 rounded-full bg-blue-300/25 blur-[75px] dark:bg-blue-700/10" />
 
                     <div className="absolute left-[35%] top-[30%] h-32 w-32 rounded-full bg-cyan-300/20 blur-[65px] dark:bg-cyan-700/10" />
 
-                    <div className="relative flex min-h-[360px] flex-col justify-between">
+                    <div className="relative flex min-h-[300px] min-w-0 flex-col justify-between sm:min-h-[360px]">
                       {/* Top bar */}
-                      <div className="flex items-center justify-between">
-                        <span className="rounded-full border border-white/60 bg-slate-100/80 px-3 py-1.5 text-[10px] font-bold tracking-wide text-slate-500 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-800/70 dark:text-slate-300">
+
+                      <div className="flex min-w-0 items-center justify-between gap-3">
+                        <span className="min-w-0 truncate rounded-full border border-white/60 bg-slate-100/80 px-3 py-1.5 text-[10px] font-bold tracking-wide text-slate-500 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-800/70 dark:text-slate-300">
                           TECHNICAL COUNCIL
                         </span>
 
-                        <div className="flex gap-1.5">
+                        <div className="flex shrink-0 gap-1.5">
                           <span className="h-2.5 w-2.5 rounded-full bg-red-300 shadow-sm" />
                           <span className="h-2.5 w-2.5 rounded-full bg-yellow-300 shadow-sm" />
                           <span className="h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-sm" />
@@ -565,39 +595,50 @@ export default function Home() {
                       </div>
 
                       {/* Center */}
-                      <div className="flex flex-1 items-center justify-center">
-                        <div className="relative flex h-56 w-56 items-center justify-center rounded-[58px] border border-white/80 bg-white/55 shadow-[0_30px_70px_rgba(30,110,130,0.15)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-800/55 dark:shadow-[0_30px_70px_rgba(0,0,0,0.3)]">
-                          <div className="absolute inset-6 rounded-[45px] bg-gradient-to-br from-blue-500/15 via-cyan-500/15 to-emerald-400/20" />
 
-                          <div className="absolute inset-0 rounded-[58px] bg-gradient-to-br from-white/40 via-transparent to-transparent dark:from-white/[0.06] dark:via-transparent" />
+                      <div className="flex min-h-0 flex-1 items-center justify-center py-4">
+                        <div className="relative flex h-44 w-44 max-w-full items-center justify-center rounded-[50px] border border-white/80 bg-white/55 shadow-[0_30px_70px_rgba(30,110,130,0.15)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-800/55 dark:shadow-[0_30px_70px_rgba(0,0,0,0.3)] sm:h-56 sm:w-56 sm:rounded-[58px]">
+                          <div className="absolute inset-5 rounded-[38px] bg-gradient-to-br from-blue-500/15 via-cyan-500/15 to-emerald-400/20 sm:inset-6 sm:rounded-[45px]" />
 
-                          <div className="relative flex h-28 w-28 items-center justify-center rounded-[34px] bg-gradient-to-br from-blue-500 via-cyan-500 to-emerald-500 text-white shadow-2xl shadow-cyan-500/25">
+                          <div className="absolute inset-0 rounded-[50px] bg-gradient-to-br from-white/40 via-transparent to-transparent dark:from-white/[0.06] dark:via-transparent sm:rounded-[58px]" />
+
+                          <div className="relative flex h-24 w-24 items-center justify-center rounded-[30px] bg-gradient-to-br from-blue-500 via-cyan-500 to-emerald-500 text-white shadow-2xl shadow-cyan-500/25 sm:h-28 sm:w-28 sm:rounded-[34px]">
+                            <Cpu
+                              size={46}
+                              strokeWidth={1.5}
+                              className="sm:hidden"
+                            />
+
                             <Cpu
                               size={52}
                               strokeWidth={1.5}
+                              className="hidden sm:block"
                             />
                           </div>
 
                           {/* Code card */}
-                          <div className="absolute -right-4 top-10 rounded-2xl border border-white/80 bg-white/80 p-3 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-slate-800/75">
+
+                          <div className="absolute -right-3 top-8 rounded-2xl border border-white/80 bg-white/80 p-2.5 shadow-xl backdrop-blur-xl sm:-right-4 sm:top-10 sm:p-3 dark:border-white/10 dark:bg-slate-800/75">
                             <Code2
-                              size={19}
-                              className="text-blue-600 dark:text-blue-400"
+                              size={18}
+                              className="text-blue-600 dark:text-blue-400 sm:h-[19px] sm:w-[19px]"
                             />
                           </div>
 
                           {/* Sparkle card */}
-                          <div className="absolute -bottom-4 left-7 rounded-2xl border border-white/80 bg-white/80 p-3 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-slate-800/75">
+
+                          <div className="absolute -bottom-3 left-5 rounded-2xl border border-white/80 bg-white/80 p-2.5 shadow-xl backdrop-blur-xl sm:-bottom-4 sm:left-7 sm:p-3 dark:border-white/10 dark:bg-slate-800/75">
                             <Sparkles
-                              size={19}
-                              className="text-emerald-600 dark:text-emerald-400"
+                              size={18}
+                              className="text-emerald-600 dark:text-emerald-400 sm:h-[19px] sm:w-[19px]"
                             />
                           </div>
                         </div>
                       </div>
 
                       {/* Bottom message */}
-                      <div className="rounded-3xl border border-white/80 bg-white/60 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-800/55">
+
+                      <div className="rounded-3xl border border-white/80 bg-white/60 p-3.5 shadow-sm backdrop-blur-xl sm:p-4 dark:border-white/10 dark:bg-slate-800/55">
                         <div className="text-lg font-bold text-slate-950 dark:text-white sm:text-xl">
                           Build. Learn. Innovate.
                         </div>
@@ -619,9 +660,11 @@ export default function Home() {
       {/* =========================================================
           NOTICE BOARD
       ========================================================= */}
+
       <section className="mx-auto max-w-7xl px-5 py-8 lg:px-8">
         <div className="grid gap-5 lg:grid-cols-[0.72fr_1.28fr]">
           {/* Notice intro */}
+
           <GlassCard className="relative overflow-hidden p-6">
             <div className="absolute right-[-60px] top-[-60px] h-48 w-48 rounded-full bg-blue-300/25 blur-[70px] dark:bg-blue-700/10" />
 
@@ -652,6 +695,7 @@ export default function Home() {
           </GlassCard>
 
           {/* Notices */}
+
           <div className="grid gap-3 sm:grid-cols-3">
             {notices.map((notice, index) => (
               <GlassCard
@@ -702,6 +746,7 @@ export default function Home() {
       {/* =========================================================
           EVENTS
       ========================================================= */}
+
       <section className="mx-auto max-w-7xl px-5 py-12 lg:px-8">
         <div className="mb-7 flex items-end justify-between gap-5">
           <div>
@@ -828,6 +873,7 @@ export default function Home() {
       {/* =========================================================
           GALLERY
       ========================================================= */}
+
       <section className="border-y border-slate-200/70 bg-white/35 dark:border-white/10 dark:bg-slate-900/20">
         <div className="mx-auto max-w-7xl px-5 py-14 lg:px-8">
           <div className="mb-7 flex items-end justify-between gap-5">
@@ -857,9 +903,11 @@ export default function Home() {
 
           <div className="grid gap-4 md:grid-cols-[1.35fr_0.65fr]">
             {/* Large gallery card */}
+
             <HomepageGallery images={galleryImages} />
 
             {/* Right stack */}
+
             <div className="grid gap-4">
               <Link
                 href="/gallery"
@@ -916,6 +964,7 @@ export default function Home() {
       {/* =========================================================
           TECHNICAL COMMUNITY
       ========================================================= */}
+
       <section className="mx-auto max-w-7xl px-5 py-14 lg:px-8">
         <div className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
           <GlassCard className="relative overflow-hidden p-7">
@@ -928,6 +977,7 @@ export default function Home() {
 
               <h2 className="mt-2 text-3xl font-bold leading-tight text-slate-950 dark:text-white">
                 More than a council.
+
                 <span className="block text-slate-400 dark:text-slate-600">
                   A place to grow.
                 </span>
@@ -991,6 +1041,7 @@ export default function Home() {
           FINAL CTA
           NO GRADIENT
       ========================================================= */}
+
       <section className="mx-auto max-w-7xl px-5 pb-16 pt-4 lg:px-8">
         <div className="relative overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/75 p-7 shadow-[0_18px_55px_rgba(60,70,120,0.09)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-900/60 dark:shadow-[0_18px_55px_rgba(0,0,0,0.28)] sm:p-10">
           <div className="relative flex flex-col items-start justify-between gap-7 sm:flex-row sm:items-center">
@@ -1001,6 +1052,7 @@ export default function Home() {
 
               <h2 className="text-3xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-4xl">
                 Have an idea?
+
                 <span className="block text-slate-400 dark:text-slate-600">
                   Let&apos;s make it happen.
                 </span>
