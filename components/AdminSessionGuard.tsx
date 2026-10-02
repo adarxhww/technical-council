@@ -19,9 +19,14 @@ export default function AdminSessionGuard() {
   const lastActivityRef = useRef(Date.now());
   const sessionStartedRef = useRef<number | null>(null);
   const lastSyncRef = useRef(0);
-
   const loggingOutRef = useRef(false);
   const initializedRef = useRef(false);
+
+  /*
+   * =========================================================
+   * SESSION / ACTIVITY MANAGEMENT
+   * =========================================================
+   */
 
   useEffect(() => {
     let mounted = true;
@@ -33,9 +38,6 @@ export default function AdminSessionGuard() {
      * - page refresh
      * - navigation between /admin pages
      * - normal tab switching
-     *
-     * It is intentionally NOT cleared during normal
-     * component/page lifecycle events.
      */
     const storedStartedAt = sessionStorage.getItem(
       SESSION_STARTED_KEY
@@ -55,15 +57,12 @@ export default function AdminSessionGuard() {
     lastActivityRef.current = Date.now();
 
     /*
-     * Synchronize the browser activity state with the
+     * Synchronize browser activity with the
      * server-side admin session.
-     *
-     * A failed synchronization must NOT immediately
-     * log the administrator out. Supabase can temporarily
-     * be restoring its authentication session after login
-     * or refresh.
      */
-    async function syncSessionActivity(force = false) {
+    async function syncSessionActivity(
+      force = false
+    ) {
       if (!mounted) {
         return false;
       }
@@ -72,7 +71,8 @@ export default function AdminSessionGuard() {
 
       if (
         !force &&
-        now - lastSyncRef.current < ACTIVITY_SYNC_MS
+        now - lastSyncRef.current <
+          ACTIVITY_SYNC_MS
       ) {
         return true;
       }
@@ -90,7 +90,8 @@ export default function AdminSessionGuard() {
             credentials: "include",
             body: JSON.stringify({
               startedAt:
-                sessionStartedRef.current ?? undefined,
+                sessionStartedRef.current ??
+                undefined,
               lastActivityAt: now,
             }),
           }
@@ -105,20 +106,23 @@ export default function AdminSessionGuard() {
           .catch(() => null);
 
         /*
-         * If the server supplied the original session
-         * start time, preserve it locally.
+         * If the server supplied the original
+         * session start time, preserve it locally.
          */
         if (
           result?.startedAt &&
           !sessionStartedRef.current
         ) {
-          const startedAt = Number(result.startedAt);
+          const startedAt = Number(
+            result.startedAt
+          );
 
           if (
             Number.isFinite(startedAt) &&
             startedAt > 0
           ) {
-            sessionStartedRef.current = startedAt;
+            sessionStartedRef.current =
+              startedAt;
 
             sessionStorage.setItem(
               SESSION_STARTED_KEY,
@@ -130,22 +134,22 @@ export default function AdminSessionGuard() {
         return true;
       } catch {
         /*
-         * Network/session restoration failures are
-         * deliberately ignored here.
+         * Network/session restoration failures
+         * do not log the administrator out.
          */
         return false;
       }
     }
 
     /*
-     * Give Supabase/browser authentication a short amount
-     * of time to restore the session after login or refresh.
-     *
-     * We do NOT redirect to /login merely because the first
-     * request happens before the session is restored.
+     * Give Supabase/browser authentication time
+     * to restore the session after login or refresh.
      */
     async function initializeAdminSession() {
-      if (!mounted || initializedRef.current) {
+      if (
+        !mounted ||
+        initializedRef.current
+      ) {
         return;
       }
 
@@ -158,36 +162,33 @@ export default function AdminSessionGuard() {
           return;
         }
 
-        const synced = await syncSessionActivity(true);
+        const synced =
+          await syncSessionActivity(true);
 
         if (synced) {
           initializedRef.current = true;
           return;
         }
 
-        /*
-         * Wait before retrying. This gives the Supabase
-         * client time to restore its browser session.
-         */
-        if (attempt < SESSION_RETRY_COUNT - 1) {
-          await new Promise<void>((resolve) => {
-            window.setTimeout(
-              resolve,
-              SESSION_RETRY_DELAY_MS
-            );
-          });
+        if (
+          attempt <
+          SESSION_RETRY_COUNT - 1
+        ) {
+          await new Promise<void>(
+            (resolve) => {
+              window.setTimeout(
+                resolve,
+                SESSION_RETRY_DELAY_MS
+              );
+            }
+          );
         }
       }
 
       /*
-       * Do not force a logout here.
-       *
-       * Middleware/server-side authentication remains the
-       * authoritative protection for /admin.
-       *
-       * The guard's job is session timing/activity control,
-       * not to incorrectly reject a temporarily unavailable
-       * client session.
+       * Do not force logout here.
+       * Middleware/server authentication remains
+       * authoritative for /admin.
        */
       initializedRef.current = true;
     }
@@ -228,7 +229,9 @@ export default function AdminSessionGuard() {
      * 2. 12-hour maximum session lifetime
      */
     async function logout(
-      reason: "inactivity" | "max-lifetime"
+      reason:
+        | "inactivity"
+        | "max-lifetime"
     ) {
       if (loggingOutRef.current) {
         return;
@@ -253,8 +256,8 @@ export default function AdminSessionGuard() {
         );
       } catch {
         /*
-         * Even if the logout request fails, the local
-         * admin page must still leave the protected area.
+         * Even if the logout request fails,
+         * leave the protected admin area.
          */
       } finally {
         sessionStorage.removeItem(
@@ -268,8 +271,8 @@ export default function AdminSessionGuard() {
     }
 
     /*
-     * Check inactivity and maximum session lifetime
-     * every second.
+     * Check inactivity and maximum session
+     * lifetime every second.
      */
     const interval = window.setInterval(() => {
       if (!mounted) {
@@ -289,8 +292,7 @@ export default function AdminSessionGuard() {
         : 0;
 
       /*
-       * Maximum session lifetime:
-       * 12 hours from the original login.
+       * Maximum session lifetime.
        */
       if (
         sessionStarted &&
@@ -301,8 +303,8 @@ export default function AdminSessionGuard() {
       }
 
       /*
-       * Automatic logout after 10 minutes without
-       * activity.
+       * Automatic logout after 10 minutes
+       * without activity.
        */
       if (
         inactiveFor >= INACTIVITY_MS
@@ -312,7 +314,7 @@ export default function AdminSessionGuard() {
       }
 
       /*
-       * Show warning during the final 60 seconds.
+       * Show warning during final 60 seconds.
        */
       const remaining =
         INACTIVITY_MS - inactiveFor;
@@ -337,8 +339,7 @@ export default function AdminSessionGuard() {
      * When the administrator returns to the tab:
      *
      * - Switching tabs does NOT automatically log out.
-     * - If the inactivity limit was actually exceeded,
-     *   logout occurs.
+     * - If inactivity was actually exceeded, logout occurs.
      * - Otherwise returning to the tab counts as activity.
      */
     function handleVisibilityChange() {
@@ -407,11 +408,16 @@ export default function AdminSessionGuard() {
   }, []);
 
   /*
-   * Detect navigation from /admin to a public route.
+   * =========================================================
+   * PUBLIC NAVIGATION DETECTOR
+   * =========================================================
    *
-   * Navigation between /admin/* pages is allowed without
-   * logging out.
+   * IMPORTANT:
+   *
+   * This listener must NOT treat downloads or
+   * "open in new tab" actions as leaving /admin.
    */
+
   useEffect(() => {
     async function handlePublicNavigation(
       event: MouseEvent
@@ -435,9 +441,6 @@ export default function AdminSessionGuard() {
        * middle-click
        * Shift-click
        * Alt-click
-       *
-       * These may intentionally open another browsing
-       * context.
        */
       if (
         event.ctrlKey ||
@@ -449,6 +452,55 @@ export default function AdminSessionGuard() {
         return;
       }
 
+      /*
+       * =====================================================
+       * FIX #1 — CSV / FILE DOWNLOAD
+       * =====================================================
+       *
+       * The CSV exporter creates a temporary anchor:
+       *
+       *   <a download href="blob:...">
+       *
+       * Its click bubbles to document.
+       *
+       * Without this check, the guard thinks the admin
+       * is navigating away and calls /api/auth/logout.
+       */
+      if (
+        anchor.hasAttribute("download") ||
+        anchor.href.startsWith("blob:")
+      ) {
+        return;
+      }
+
+      /*
+       * =====================================================
+       * FIX #2 — RESUME / NEW TAB
+       * =====================================================
+       *
+       * Resume viewing can use:
+       *
+       *   target="_blank"
+       *
+       * or:
+       *
+       *   rel="noopener noreferrer"
+       *
+       * These actions are NOT an admin navigation.
+       *
+       * Never log out because of them.
+       */
+      if (
+        anchor.target === "_blank" ||
+        anchor.rel.includes("noopener") ||
+        anchor.rel.includes("noreferrer")
+      ) {
+        return;
+      }
+
+      /*
+       * Build the destination URL.
+       */
       const url = new URL(
         anchor.href,
         window.location.origin
@@ -456,6 +508,8 @@ export default function AdminSessionGuard() {
 
       /*
        * Only handle same-origin navigation.
+       *
+       * External links are left to the browser.
        */
       if (
         url.origin !==
@@ -465,6 +519,10 @@ export default function AdminSessionGuard() {
       }
 
       /*
+       * =====================================================
+       * ADMIN NAVIGATION
+       * =====================================================
+       *
        * Anything inside /admin remains authenticated.
        */
       const staysInsideAdmin =
@@ -476,8 +534,11 @@ export default function AdminSessionGuard() {
       }
 
       /*
-       * Leaving /admin means the admin session should
-       * be terminated.
+       * =====================================================
+       * GENUINELY LEAVING ADMIN
+       * =====================================================
+       *
+       * Only now do we terminate the admin session.
        */
       event.preventDefault();
 
@@ -519,8 +580,11 @@ export default function AdminSessionGuard() {
   }, []);
 
   /*
-   * No warning = render nothing.
+   * =========================================================
+   * WARNING UI
+   * =========================================================
    */
+
   if (!warning) {
     return null;
   }

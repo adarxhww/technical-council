@@ -1,9 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
-
-import {
-  NextResponse,
-  type NextRequest,
-} from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 const ADMIN_SESSION_COOKIE = "tc_admin_session";
 
@@ -32,11 +28,9 @@ export async function middleware(request: NextRequest) {
         },
 
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(
-            ({ name, value }) => {
-              request.cookies.set(name, value);
-            }
-          );
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value);
+          });
 
           response = NextResponse.next({
             request: {
@@ -45,11 +39,7 @@ export async function middleware(request: NextRequest) {
           });
 
           cookiesToSet.forEach(
-            ({
-              name,
-              value,
-              options,
-            }) => {
+            ({ name, value, options }) => {
               response.cookies.set(
                 name,
                 value,
@@ -62,14 +52,6 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  /*
-   * Get the currently authenticated
-   * Supabase user.
-   *
-   * getUser() verifies the session
-   * with Supabase rather than trusting
-   * a client-side value.
-   */
   const {
     data,
     error,
@@ -81,25 +63,15 @@ export async function middleware(request: NextRequest) {
    * ==========================================================
    * ADMIN ROUTES
    * ==========================================================
-   *
-   * Every /admin route requires:
-   *
-   * 1. A valid Supabase user
-   * 2. An active admin_profiles record
    */
+
   if (isAdminRoute) {
-    /*
-     * No authenticated user.
-     */
     if (error || !user) {
       return NextResponse.redirect(
         new URL("/login", request.url)
       );
     }
 
-    /*
-     * Check the admin profile.
-     */
     const {
       data: adminProfile,
       error: adminProfileError,
@@ -109,10 +81,6 @@ export async function middleware(request: NextRequest) {
       .eq("id", user.id)
       .maybeSingle();
 
-    /*
-     * User must have an active
-     * admin profile.
-     */
     if (
       adminProfileError ||
       !adminProfile ||
@@ -133,11 +101,7 @@ export async function middleware(request: NextRequest) {
     }
 
     /*
-     * Create the admin-session marker
-     * if it does not already exist.
-     *
-     * No maxAge or expires is used,
-     * so this behaves as a session cookie.
+     * Keep the admin marker.
      */
     if (
       !request.cookies.get(
@@ -151,17 +115,12 @@ export async function middleware(request: NextRequest) {
           httpOnly: true,
           sameSite: "lax",
           secure:
-            process.env.NODE_ENV ===
-            "production",
+            process.env.NODE_ENV === "production",
           path: "/",
         }
       );
     }
 
-    /*
-     * Moving between /admin pages does
-     * not log the administrator out.
-     */
     return response;
   }
 
@@ -169,16 +128,9 @@ export async function middleware(request: NextRequest) {
    * ==========================================================
    * LOGIN ROUTE
    * ==========================================================
-   *
-   * If an already authenticated active
-   * admin visits /login, send them
-   * back to /admin.
    */
-  if (
-    isLoginRoute &&
-    user &&
-    !error
-  ) {
+
+  if (isLoginRoute && user && !error) {
     const {
       data: adminProfile,
       error: adminProfileError,
@@ -203,53 +155,33 @@ export async function middleware(request: NextRequest) {
    * PUBLIC ROUTES
    * ==========================================================
    *
-   * If an authenticated administrator with
-   * an admin-session marker reaches an actual
-   * public application route, terminate the
-   * admin session.
+   * IMPORTANT:
    *
-   * Static assets are excluded by the matcher
-   * below, so requests such as:
+   * DO NOT sign the user out here.
    *
-   * /images/logo.png
-   * /images/hero.png
-   * /manifest.webmanifest
+   * An authenticated admin may legitimately access:
    *
-   * cannot accidentally trigger this logout.
+   * - public pages
+   * - recruitment pages
+   * - uploaded/downloaded resources
+   * - other application routes
+   *
+   * Visiting those routes must not destroy
+   * the Supabase session.
    */
-  const adminSession =
-    request.cookies.get(
-      ADMIN_SESSION_COOKIE
-    )?.value;
-
-  if (
-    adminSession &&
-    user &&
-    !error
-  ) {
-    await supabase.auth.signOut();
-
-    response.cookies.delete(
-      ADMIN_SESSION_COOKIE
-    );
-  }
 
   return response;
 }
 
 /*
- * Run middleware for application routes
- * while excluding:
+ * ==========================================================
+ * MATCHER
+ * ==========================================================
  *
- * - API routes
- * - Next.js internals
- * - static files/assets
- *
- * The final .*\\..* exclusion is important:
- * it prevents public assets such as images,
- * fonts, manifests and other files from being
- * interpreted as navigation to a public page.
+ * API routes are intentionally excluded because their
+ * authentication is handled inside the API route itself.
  */
+
 export const config = {
   matcher: [
     "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)",

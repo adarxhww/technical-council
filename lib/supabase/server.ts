@@ -19,8 +19,8 @@ export async function createClient() {
               cookieStore.set(name, value, options);
             });
           } catch {
-            // Cookie updates can fail when called from a Server Component.
-            // Middleware handles session refreshes.
+            // Cookie updates can fail in Server Components.
+            // Middleware is responsible for refreshing the session.
           }
         },
       },

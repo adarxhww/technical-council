@@ -3,7 +3,6 @@
 import Link from "next/link";
 
 import {
-  ArrowLeft,
   ArrowRight,
   CalendarDays,
   Camera,
@@ -36,6 +35,9 @@ type Notice = {
   date: string;
   description: string;
   published: boolean;
+  attachment_url: string | null;
+  attachment_text: string | null;
+  attachment_enabled: boolean | null;
 };
 
 type GalleryImage = {
@@ -89,7 +91,9 @@ async function getUpcomingEvents(): Promise<Event[]> {
 async function getPublishedNotices(): Promise<Notice[]> {
   const { data, error } = await supabase
     .from("notices")
-    .select("id, title, date, description, published")
+    .select(
+      "id, title, date, description, published, attachment_url, attachment_text, attachment_enabled"
+    )
     .eq("published", true)
     .order("created_at", { ascending: false })
     .limit(3);
@@ -99,7 +103,23 @@ async function getPublishedNotices(): Promise<Notice[]> {
     return [];
   }
 
-  return data ?? [];
+  return (data ?? []).map((notice) => ({
+    ...notice,
+    attachment_url:
+      typeof notice.attachment_url === "string"
+        ? notice.attachment_url.trim()
+        : null,
+    attachment_text:
+      typeof notice.attachment_text === "string"
+        ? notice.attachment_text.trim()
+        : null,
+    attachment_enabled:
+      notice.attachment_enabled === true
+        ? true
+        : notice.attachment_enabled === false
+        ? false
+        : null,
+  })) as Notice[];
 }
 
 async function getHomepageGalleryImages(): Promise<GalleryImage[]> {
@@ -184,7 +204,6 @@ function HomepageGallery({
   images: GalleryImage[];
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
-
   const hasImages = images.length > 0;
 
   useEffect(() => {
@@ -271,7 +290,10 @@ function HomepageGallery({
             aria-label="Previous gallery image"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-white/80 bg-white/80 text-slate-700 shadow-lg backdrop-blur-xl transition hover:scale-105 hover:bg-white dark:border-white/10 dark:bg-slate-900/75 dark:text-white dark:hover:bg-slate-900"
           >
-            <ArrowLeft size={16} />
+            <ArrowRight
+              size={16}
+              className="rotate-180"
+            />
           </button>
 
           <div className="flex items-center gap-1.5 rounded-full border border-white/80 bg-white/75 px-3 py-2 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/75">
@@ -298,7 +320,6 @@ function HomepageGallery({
         </div>
       )}
 
-      {/* CAMERA OVERLAY */}
       <div
         className="absolute bottom-[-35px] right-[-20px] z-20 flex h-56 w-56 rotate-[-8deg] items-center justify-center rounded-[55px] border border-white/25 shadow-2xl transition duration-500 group-hover:rotate-0 group-hover:scale-105"
         style={{
@@ -350,25 +371,20 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="min-h-screen w-full overflow-x-hidden overflow-y-visible bg-[#f6fbfc] text-slate-950 dark:bg-[#08090d] dark:text-slate-100">
+    <main className="min-h-screen overflow-x-clip bg-[#f6fbfc] text-slate-950 dark:bg-[#08090d] dark:text-slate-100">
       {/* =========================================================
           GLOBAL BACKGROUND
       ========================================================= */}
 
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-[#f6fbfc] dark:bg-[#08090d]">
-        {/* Blue glow */}
         <div className="absolute left-[-180px] top-[100px] h-[520px] w-[520px] rounded-full bg-blue-300/35 blur-[130px] dark:bg-blue-700/15" />
 
-        {/* Cyan glow */}
         <div className="absolute left-[28%] top-[120px] h-[430px] w-[430px] rounded-full bg-cyan-200/30 blur-[125px] dark:bg-cyan-700/10" />
 
-        {/* Green glow */}
         <div className="absolute right-[-160px] top-[170px] h-[520px] w-[520px] rounded-full bg-emerald-300/35 blur-[140px] dark:bg-emerald-700/10" />
 
-        {/* Sky glow */}
         <div className="absolute bottom-[-180px] left-[35%] h-[450px] w-[450px] rounded-full bg-sky-200/30 blur-[130px] dark:bg-sky-700/10" />
 
-        {/* Soft central green */}
         <div className="absolute left-[48%] top-[42%] h-[280px] w-[280px] rounded-full bg-teal-200/20 blur-[110px] dark:bg-teal-700/10" />
       </div>
 
@@ -376,9 +392,7 @@ export default function Home() {
           HERO
       ========================================================= */}
 
-      <section className="relative mx-auto w-full max-w-7xl overflow-visible px-5 pb-12 pt-8 lg:px-8 lg:pb-16 lg:pt-10">
-        {/* Hero ambient background */}
-
+      <section className="relative mx-auto w-full max-w-7xl overflow-hidden px-5 pb-12 pt-8 lg:px-8 lg:pb-16 lg:pt-10">
         <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[760px] overflow-hidden">
           <div className="absolute left-[5%] top-[10%] h-[350px] w-[350px] rounded-full bg-blue-400/20 blur-[125px] dark:bg-blue-500/10" />
 
@@ -386,8 +400,6 @@ export default function Home() {
 
           <div className="absolute left-[42%] top-[30%] h-[300px] w-[300px] rounded-full bg-cyan-300/20 blur-[110px] dark:bg-cyan-500/10" />
         </div>
-
-        {/* Subtle technical grid */}
 
         <div
           className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[650px] opacity-[0.25] dark:opacity-[0.1]"
@@ -402,13 +414,7 @@ export default function Home() {
           }}
         />
 
-        {/* =====================================================
-            FULL HERO GLASS RECTANGLE
-        ===================================================== */}
-
         <div className="relative w-full min-w-0 overflow-hidden rounded-[40px] border border-white/75 bg-white/35 p-2 shadow-[0_30px_100px_rgba(45,100,130,0.12)] backdrop-blur-2xl dark:border-white/[0.08] dark:bg-slate-900/30 dark:shadow-[0_30px_100px_rgba(0,0,0,0.25)]">
-          {/* Glass rectangle internal glow */}
-
           <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[38px]">
             <div className="absolute left-[-100px] top-[-120px] h-[340px] w-[340px] rounded-full bg-blue-400/20 blur-[110px]" />
 
@@ -417,24 +423,16 @@ export default function Home() {
             <div className="absolute bottom-[-120px] left-[35%] h-[320px] w-[320px] rounded-full bg-cyan-300/15 blur-[110px]" />
           </div>
 
-          <div className="relative w-full min-w-0 rounded-[34px] border border-white/55 bg-white/25 px-5 py-7 backdrop-blur-xl dark:border-white/[0.05] dark:bg-slate-950/20 sm:px-8 sm:py-9 lg:px-10 lg:py-10">
+          <div className="relative min-w-0 rounded-[34px] border border-white/55 bg-white/25 px-5 py-7 backdrop-blur-xl dark:border-white/[0.05] dark:bg-slate-950/20 sm:px-8 sm:py-9 lg:px-10 lg:py-10">
             <div className="grid min-w-0 items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
-              {/* =================================================
-                  LEFT HERO CONTENT
-              ================================================= */}
-
               <div className="relative min-w-0">
-                {/* Location pill */}
-
-                <div className="mb-5 inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border border-white/80 bg-white/75 px-4 py-2 text-xs font-semibold leading-5 text-slate-600 shadow-[0_8px_30px_rgba(70,80,120,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/65 dark:text-slate-300 sm:text-sm">
+                <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-white/80 bg-white/75 px-3 py-2 text-[10px] font-semibold text-slate-600 shadow-[0_8px_30px_rgba(70,80,120,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/65 dark:text-slate-300 sm:px-4 sm:text-sm">
                   <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
 
-                  <span>
+                  <span className="whitespace-nowrap">
                     Rajkiya Engineering College, Ambedkar Nagar
                   </span>
                 </div>
-
-                {/* Heading */}
 
                 <h1 className="max-w-3xl text-4xl font-bold leading-[0.98] tracking-[-0.045em] text-slate-950 dark:text-white sm:text-6xl lg:text-7xl">
                   Where
@@ -450,107 +448,104 @@ export default function Home() {
                   </span>
                 </h1>
 
-                {/* Gradient accent */}
-
                 <div className="mt-2 flex items-center gap-2">
                   <span className="h-[3px] w-11 rounded-full bg-blue-500" />
+
                   <span className="h-[3px] w-7 rounded-full bg-cyan-500" />
+
                   <span className="h-[3px] w-5 rounded-full bg-emerald-500" />
                 </div>
-
-                {/* Description */}
 
                 <p className="mt-5 max-w-xl text-base leading-7 text-slate-600 dark:text-slate-400 sm:text-lg">
                   <span className="font-semibold text-slate-800 dark:text-slate-200">
                     Ideas start here. Skills grow here. Innovation
                     begins here.
                   </span>{" "}
-                  The Technical Council brings together students who
-                  love technology, engineering and building things
-                  that matter.
+                  The Technical Council brings together students
+                  who love technology, engineering and building
+                  things that matter.
                 </p>
 
-                {/* CTA */}
-
-                <div className="mt-7 flex flex-wrap gap-3">
+                <div className="mt-7 flex flex-row gap-2 sm:gap-3">
                   <Link
                     href="/events"
-                    className="group relative inline-flex items-center gap-2 overflow-hidden rounded-full bg-slate-950 px-6 py-3.5 text-sm font-semibold text-white shadow-[0_12px_35px_rgba(15,23,42,0.22)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(16,185,129,0.22)] dark:bg-white dark:text-slate-950"
+                    className="group relative inline-flex flex-1 items-center justify-center gap-1.5 overflow-hidden rounded-full bg-slate-950 px-4 py-3 text-xs font-semibold text-white shadow-[0_12px_35px_rgba(15,23,42,0.22)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(16,185,129,0.22)] sm:flex-none sm:gap-2 sm:px-6 sm:py-3.5 sm:text-sm dark:bg-white dark:text-slate-950"
                   >
                     <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-blue-500/0 via-white/20 to-emerald-500/0 transition-transform duration-700 group-hover:translate-x-full dark:via-slate-900/10" />
 
-                    <span className="relative">
+                    <span className="relative whitespace-nowrap">
                       Explore Events
                     </span>
 
                     <ArrowRight
-                      size={17}
-                      className="relative transition-transform group-hover:translate-x-1"
+                      size={15}
+                      className="relative shrink-0 transition-transform group-hover:translate-x-1 sm:h-[17px] sm:w-[17px]"
                     />
                   </Link>
 
                   <Link
                     href="/team"
-                    className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/70 px-6 py-3.5 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:bg-white hover:shadow-lg dark:border-white/10 dark:bg-slate-900/65 dark:text-slate-200 dark:hover:bg-slate-900"
+                    className="inline-flex flex-1 items-center justify-center rounded-full border border-white/80 bg-white/70 px-4 py-3 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:bg-white hover:shadow-lg sm:flex-none sm:px-6 sm:py-3.5 sm:text-sm dark:border-white/10 dark:bg-slate-900/65 dark:text-slate-200 dark:hover:bg-slate-900"
                   >
-                    Meet the Team
+                    <span className="whitespace-nowrap">
+                      Meet the Team
+                    </span>
                   </Link>
                 </div>
 
-                {/* =================================================
-                    MINI STATS
-                ================================================= */}
-
-                <div className="mt-8 flex w-full min-w-0 gap-3">
-                  {/* Members */}
-
-                  <div className="flex min-w-0 flex-1 basis-0 items-center gap-2 rounded-2xl border border-white/80 bg-white/65 px-3 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 sm:flex-none sm:px-4">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                      <Users size={15} />
+                <div className="mt-8 flex w-full min-w-0 flex-nowrap gap-2 sm:gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-2xl border border-white/80 bg-white/65 px-2.5 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 sm:flex-none sm:gap-2 sm:px-4">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 sm:h-8 sm:w-8 sm:rounded-xl">
+                      <Users
+                        size={12}
+                        className="sm:h-[15px] sm:w-[15px]"
+                      />
                     </div>
 
                     <div className="min-w-0">
-                      <span className="block text-base font-bold leading-none text-slate-950 dark:text-white sm:text-lg">
+                      <span className="block text-sm font-bold leading-none text-slate-950 dark:text-white sm:text-lg">
                         30+
                       </span>
 
-                      <span className="mt-1 block truncate text-[10px] text-slate-500 dark:text-slate-400 sm:text-xs">
+                      <span className="mt-1 block whitespace-nowrap text-[9px] text-slate-500 dark:text-slate-400 sm:text-xs">
                         Members
                       </span>
                     </div>
                   </div>
 
-                  {/* Events */}
-
-                  <div className="flex min-w-0 flex-1 basis-0 items-center gap-2 rounded-2xl border border-white/80 bg-white/65 px-3 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 sm:flex-none sm:px-4">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-400">
-                      <CalendarDays size={15} />
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-2xl border border-white/80 bg-white/65 px-2.5 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 sm:flex-none sm:gap-2 sm:px-4">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-400 sm:h-8 sm:w-8 sm:rounded-xl">
+                      <CalendarDays
+                        size={12}
+                        className="sm:h-[15px] sm:w-[15px]"
+                      />
                     </div>
 
                     <div className="min-w-0">
-                      <span className="block text-base font-bold leading-none text-slate-950 dark:text-white sm:text-lg">
+                      <span className="block text-sm font-bold leading-none text-slate-950 dark:text-white sm:text-lg">
                         5+
                       </span>
 
-                      <span className="mt-1 block truncate text-[10px] text-slate-500 dark:text-slate-400 sm:text-xs">
+                      <span className="mt-1 block whitespace-nowrap text-[9px] text-slate-500 dark:text-slate-400 sm:text-xs">
                         Events
                       </span>
                     </div>
                   </div>
 
-                  {/* Community */}
-
-                  <div className="flex min-w-0 flex-1 basis-0 items-center gap-2 rounded-2xl border border-white/80 bg-white/65 px-3 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 sm:flex-none sm:px-4">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                      <Sparkles size={15} />
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-2xl border border-white/80 bg-white/65 px-2.5 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 sm:flex-none sm:gap-2 sm:px-4">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 sm:h-8 sm:w-8 sm:rounded-xl">
+                      <Sparkles
+                        size={12}
+                        className="sm:h-[15px] sm:w-[15px]"
+                      />
                     </div>
 
                     <div className="min-w-0">
-                      <span className="block text-base font-bold leading-none text-slate-950 dark:text-white sm:text-lg">
+                      <span className="block text-sm font-bold leading-none text-slate-950 dark:text-white sm:text-lg">
                         1
                       </span>
 
-                      <span className="mt-1 block truncate text-[10px] text-slate-500 dark:text-slate-400 sm:text-xs">
+                      <span className="mt-1 block whitespace-nowrap text-[9px] text-slate-500 dark:text-slate-400 sm:text-xs">
                         Community
                       </span>
                     </div>
@@ -558,30 +553,18 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* =================================================
-                  RIGHT HERO VISUAL
-              ================================================= */}
-
-              <div className="relative min-w-0">
-                {/* Outer glow */}
-
+              <div className="relative min-w-0 w-full">
                 <div className="pointer-events-none absolute -inset-8 rounded-[60px] bg-gradient-to-br from-blue-400/20 via-cyan-300/15 to-emerald-400/20 blur-3xl dark:from-blue-500/10 dark:via-cyan-500/10 dark:to-emerald-500/10" />
 
-                {/* Gradient border */}
-
-                <div className="relative w-full min-w-0 rounded-[34px] bg-gradient-to-br from-blue-300/50 via-cyan-300/30 to-emerald-300/50 p-[1px] shadow-[0_30px_90px_rgba(30,120,130,0.14)] dark:from-blue-500/20 dark:via-cyan-500/15 dark:to-emerald-500/20">
-                  <GlassCard className="relative min-h-[330px] w-full max-w-full overflow-hidden rounded-[33px] p-4 sm:min-h-[410px] sm:p-5">
-                    {/* Decorative lights */}
-
+                <div className="relative min-w-0 w-full rounded-[34px] bg-gradient-to-br from-blue-300/50 via-cyan-300/30 to-emerald-300/50 p-[1px] shadow-[0_30px_90px_rgba(30,120,130,0.14)] dark:from-blue-500/20 dark:via-cyan-500/15 dark:to-emerald-500/20">
+                  <GlassCard className="relative min-h-[390px] min-w-0 w-full overflow-hidden rounded-[33px] p-5 sm:min-h-[410px]">
                     <div className="absolute right-[-50px] top-[-50px] h-52 w-52 rounded-full bg-emerald-300/25 blur-[75px] dark:bg-emerald-700/10" />
 
                     <div className="absolute bottom-[-60px] left-[-50px] h-56 w-56 rounded-full bg-blue-300/25 blur-[75px] dark:bg-blue-700/10" />
 
                     <div className="absolute left-[35%] top-[30%] h-32 w-32 rounded-full bg-cyan-300/20 blur-[65px] dark:bg-cyan-700/10" />
 
-                    <div className="relative flex min-h-[300px] min-w-0 flex-col justify-between sm:min-h-[360px]">
-                      {/* Top bar */}
-
+                    <div className="relative flex min-h-[360px] min-w-0 flex-col justify-between">
                       <div className="flex min-w-0 items-center justify-between gap-3">
                         <span className="min-w-0 truncate rounded-full border border-white/60 bg-slate-100/80 px-3 py-1.5 text-[10px] font-bold tracking-wide text-slate-500 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-800/70 dark:text-slate-300">
                           TECHNICAL COUNCIL
@@ -589,63 +572,50 @@ export default function Home() {
 
                         <div className="flex shrink-0 gap-1.5">
                           <span className="h-2.5 w-2.5 rounded-full bg-red-300 shadow-sm" />
+
                           <span className="h-2.5 w-2.5 rounded-full bg-yellow-300 shadow-sm" />
+
                           <span className="h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-sm" />
                         </div>
                       </div>
 
-                      {/* Center */}
+                      <div className="flex min-h-0 flex-1 items-center justify-center overflow-visible py-3">
+                        <div className="relative flex h-56 w-56 max-w-[calc(100vw-100px)] items-center justify-center rounded-[58px] border border-white/80 bg-white/55 shadow-[0_30px_70px_rgba(30,110,130,0.15)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-800/55 dark:shadow-[0_30px_70px_rgba(0,0,0,0.3)]">
+                          <div className="absolute inset-6 rounded-[45px] bg-gradient-to-br from-blue-500/15 via-cyan-500/15 to-emerald-400/20" />
 
-                      <div className="flex min-h-0 flex-1 items-center justify-center py-4">
-                        <div className="relative flex h-44 w-44 max-w-full items-center justify-center rounded-[50px] border border-white/80 bg-white/55 shadow-[0_30px_70px_rgba(30,110,130,0.15)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-800/55 dark:shadow-[0_30px_70px_rgba(0,0,0,0.3)] sm:h-56 sm:w-56 sm:rounded-[58px]">
-                          <div className="absolute inset-5 rounded-[38px] bg-gradient-to-br from-blue-500/15 via-cyan-500/15 to-emerald-400/20 sm:inset-6 sm:rounded-[45px]" />
+                          <div className="absolute inset-0 rounded-[58px] bg-gradient-to-br from-white/40 via-transparent to-transparent dark:from-white/[0.06] dark:via-transparent" />
 
-                          <div className="absolute inset-0 rounded-[50px] bg-gradient-to-br from-white/40 via-transparent to-transparent dark:from-white/[0.06] dark:via-transparent sm:rounded-[58px]" />
-
-                          <div className="relative flex h-24 w-24 items-center justify-center rounded-[30px] bg-gradient-to-br from-blue-500 via-cyan-500 to-emerald-500 text-white shadow-2xl shadow-cyan-500/25 sm:h-28 sm:w-28 sm:rounded-[34px]">
-                            <Cpu
-                              size={46}
-                              strokeWidth={1.5}
-                              className="sm:hidden"
-                            />
-
+                          <div className="relative flex h-28 w-28 items-center justify-center rounded-[34px] bg-gradient-to-br from-blue-500 via-cyan-500 to-emerald-500 text-white shadow-2xl shadow-cyan-500/25">
                             <Cpu
                               size={52}
                               strokeWidth={1.5}
-                              className="hidden sm:block"
                             />
                           </div>
 
-                          {/* Code card */}
-
-                          <div className="absolute -right-3 top-8 rounded-2xl border border-white/80 bg-white/80 p-2.5 shadow-xl backdrop-blur-xl sm:-right-4 sm:top-10 sm:p-3 dark:border-white/10 dark:bg-slate-800/75">
+                          <div className="absolute -right-4 top-10 rounded-2xl border border-white/80 bg-white/80 p-3 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-slate-800/75">
                             <Code2
-                              size={18}
-                              className="text-blue-600 dark:text-blue-400 sm:h-[19px] sm:w-[19px]"
+                              size={19}
+                              className="text-blue-600 dark:text-blue-400"
                             />
                           </div>
 
-                          {/* Sparkle card */}
-
-                          <div className="absolute -bottom-3 left-5 rounded-2xl border border-white/80 bg-white/80 p-2.5 shadow-xl backdrop-blur-xl sm:-bottom-4 sm:left-7 sm:p-3 dark:border-white/10 dark:bg-slate-800/75">
+                          <div className="absolute -bottom-4 left-7 rounded-2xl border border-white/80 bg-white/80 p-3 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-slate-800/75">
                             <Sparkles
-                              size={18}
-                              className="text-emerald-600 dark:text-emerald-400 sm:h-[19px] sm:w-[19px]"
+                              size={19}
+                              className="text-emerald-600 dark:text-emerald-400"
                             />
                           </div>
                         </div>
                       </div>
 
-                      {/* Bottom message */}
-
-                      <div className="rounded-3xl border border-white/80 bg-white/60 p-3.5 shadow-sm backdrop-blur-xl sm:p-4 dark:border-white/10 dark:bg-slate-800/55">
+                      <div className="w-full min-w-0 rounded-3xl border border-white/80 bg-white/60 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-800/55">
                         <div className="text-lg font-bold text-slate-950 dark:text-white sm:text-xl">
                           Build. Learn. Innovate.
                         </div>
 
                         <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400 sm:text-sm">
-                          A space where curiosity turns into capability
-                          and ideas turn into action.
+                          A space where curiosity turns into
+                          capability and ideas turn into action.
                         </p>
                       </div>
                     </div>
@@ -663,8 +633,6 @@ export default function Home() {
 
       <section className="mx-auto max-w-7xl px-5 py-8 lg:px-8">
         <div className="grid gap-5 lg:grid-cols-[0.72fr_1.28fr]">
-          {/* Notice intro */}
-
           <GlassCard className="relative overflow-hidden p-6">
             <div className="absolute right-[-60px] top-[-60px] h-48 w-48 rounded-full bg-blue-300/25 blur-[70px] dark:bg-blue-700/10" />
 
@@ -694,37 +662,65 @@ export default function Home() {
             </div>
           </GlassCard>
 
-          {/* Notices */}
-
           <div className="grid gap-3 sm:grid-cols-3">
-            {notices.map((notice, index) => (
-              <GlassCard
-                key={notice.id}
-                className="group p-4 transition duration-300 hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-900/80"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                    {index === 0 ? (
-                      <Megaphone size={17} />
-                    ) : (
-                      <CalendarDays size={17} />
+            {notices.map((notice, index) => {
+              const hasAttachment =
+                Boolean(notice.attachment_url?.trim()) &&
+                Boolean(notice.attachment_text?.trim()) &&
+                notice.attachment_enabled === true;
+
+              return (
+                <GlassCard
+                  key={notice.id}
+                  className="group flex min-h-[190px] flex-col p-4 transition duration-300 hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-900/80"
+                >
+                  {/* TOP ROW — ICON + DATE */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                      {index === 0 ? (
+                        <Megaphone size={17} />
+                      ) : (
+                        <CalendarDays size={17} />
+                      )}
+                    </div>
+
+                    <span className="text-[9px] font-bold tracking-wide text-slate-400 dark:text-slate-500">
+                      {formatNoticeDate(notice.date)}
+                    </span>
+                  </div>
+
+                  {/* TITLE + VIEW DOCS */}
+                  <div className="mt-4 flex items-start justify-between gap-3">
+                    <h3 className="min-w-0 flex-1 text-base font-bold leading-6 text-slate-950 dark:text-white">
+                      {notice.title}
+                    </h3>
+
+                    {hasAttachment && (
+                      <a
+                        href={notice.attachment_url!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex max-w-[45%] shrink-0 items-center gap-1.5 rounded-lg border border-blue-200/80 bg-blue-50/80 px-2.5 py-1.5 text-[9px] font-semibold text-blue-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-100 hover:shadow-md dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/15"
+                      >
+                        <span className="truncate">
+                          {notice.attachment_text}
+                        </span>
+
+                        <ArrowRight
+                          size={11}
+                          className="shrink-0 transition-transform group-hover:translate-x-0.5"
+                        />
+                      </a>
                     )}
                   </div>
 
-                  <span className="text-[9px] font-bold tracking-wide text-slate-400 dark:text-slate-500">
-                    {formatNoticeDate(notice.date)}
-                  </span>
-                </div>
-
-                <h3 className="mt-4 text-sm font-bold leading-5 text-slate-950 dark:text-white">
-                  {notice.title}
-                </h3>
-
-                <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                  {notice.description}
-                </p>
-              </GlassCard>
-            ))}
+                  {/* DESCRIPTION */}
+                  <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                    {notice.description}
+                  </p>
+                </GlassCard>
+              );
+            })}
 
             {notices.length === 0 && (
               <GlassCard className="p-4 sm:col-span-3">
@@ -902,11 +898,7 @@ export default function Home() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-[1.35fr_0.65fr]">
-            {/* Large gallery card */}
-
             <HomepageGallery images={galleryImages} />
-
-            {/* Right stack */}
 
             <div className="grid gap-4">
               <Link
@@ -1039,7 +1031,6 @@ export default function Home() {
 
       {/* =========================================================
           FINAL CTA
-          NO GRADIENT
       ========================================================= */}
 
       <section className="mx-auto max-w-7xl px-5 pb-16 pt-4 lg:px-8">

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
-import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 type RouteContext = {
@@ -8,7 +9,29 @@ type RouteContext = {
 };
 
 async function getActiveAdmin() {
-  const supabase = await createClient();
+  const cookieStore = await cookies();
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {
+            // Server component / route-handler cookie writes may not
+            // always be available. Reading the existing session still works.
+          }
+        },
+      },
+    }
+  );
 
   const {
     data: { user },
@@ -23,6 +46,7 @@ async function getActiveAdmin() {
     };
   }
 
+  // Check the admin profile using the service-role client.
   const { data: adminProfile, error: adminError } =
     await supabaseAdmin
       .from("admin_profiles")
@@ -128,7 +152,8 @@ export async function GET(
       return NextResponse.json(
         {
           success: false,
-          message: "No resume was uploaded for this application.",
+          message:
+            "No resume was uploaded for this application.",
         },
         { status: 404 }
       );
