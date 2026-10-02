@@ -54,7 +54,9 @@ const supabase = createClient();
 async function getUpcomingEvents(): Promise<Event[]> {
   const { data, error } = await supabase
     .from("events")
-    .select("id, date, time, title, type, description, published")
+    .select(
+      "id, date, time, title, type, description, published"
+    )
     .eq("published", true)
     .order("date", { ascending: true });
 
@@ -63,11 +65,13 @@ async function getUpcomingEvents(): Promise<Event[]> {
     return [];
   }
 
+  const events = (data ?? []) as Event[];
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  return (data ?? [])
-    .filter((event) => {
+  return events
+    .filter((event: Event) => {
       if (!event.date) return false;
 
       const eventDate = new Date(event.date);
@@ -81,7 +85,7 @@ async function getUpcomingEvents(): Promise<Event[]> {
       return eventDate >= today;
     })
     .sort(
-      (a, b) =>
+      (a: Event, b: Event) =>
         new Date(a.date).getTime() -
         new Date(b.date).getTime()
     )
@@ -103,7 +107,9 @@ async function getPublishedNotices(): Promise<Notice[]> {
     return [];
   }
 
-  return (data ?? []).map((notice) => ({
+  const notices = (data ?? []) as Notice[];
+
+  return notices.map((notice: Notice) => ({
     ...notice,
     attachment_url:
       typeof notice.attachment_url === "string"
@@ -119,10 +125,12 @@ async function getPublishedNotices(): Promise<Notice[]> {
         : notice.attachment_enabled === false
         ? false
         : null,
-  })) as Notice[];
+  }));
 }
 
-async function getHomepageGalleryImages(): Promise<GalleryImage[]> {
+async function getHomepageGalleryImages(): Promise<
+  GalleryImage[]
+> {
   const { data, error } = await supabase
     .from("gallery_items")
     .select(
@@ -138,7 +146,7 @@ async function getHomepageGalleryImages(): Promise<GalleryImage[]> {
     return [];
   }
 
-  return data ?? [];
+  return (data ?? []) as GalleryImage[];
 }
 
 function formatEventDate(date: string) {
@@ -227,7 +235,9 @@ function HomepageGallery({
     }
   }, [currentIndex, images.length]);
 
-  const showPrevious = (event: React.MouseEvent) => {
+  const showPrevious = (
+    event: React.MouseEvent<HTMLButtonElement>
+  ) => {
     event.preventDefault();
     event.stopPropagation();
 
@@ -239,7 +249,9 @@ function HomepageGallery({
     );
   };
 
-  const showNext = (event: React.MouseEvent) => {
+  const showNext = (
+    event: React.MouseEvent<HTMLButtonElement>
+  ) => {
     event.preventDefault();
     event.stopPropagation();
 
@@ -297,16 +309,18 @@ function HomepageGallery({
           </button>
 
           <div className="flex items-center gap-1.5 rounded-full border border-white/80 bg-white/75 px-3 py-2 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/75">
-            {images.map((image, index) => (
-              <span
-                key={image.id}
-                className={`h-1.5 rounded-full transition-all ${
-                  index === currentIndex
-                    ? "w-5 bg-slate-900 dark:bg-white"
-                    : "w-1.5 bg-slate-400/60 dark:bg-slate-500"
-                }`}
-              />
-            ))}
+            {images.map(
+              (image: GalleryImage, index: number) => (
+                <span
+                  key={image.id}
+                  className={`h-1.5 rounded-full transition-all ${
+                    index === currentIndex
+                      ? "w-5 bg-slate-900 dark:bg-white"
+                      : "w-1.5 bg-slate-400/60 dark:bg-slate-500"
+                  }`}
+                />
+              )
+            )}
           </div>
 
           <button
@@ -378,13 +392,9 @@ export default function Home() {
 
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-[#f6fbfc] dark:bg-[#08090d]">
         <div className="absolute left-[-180px] top-[100px] h-[520px] w-[520px] rounded-full bg-blue-300/35 blur-[130px] dark:bg-blue-700/15" />
-
         <div className="absolute left-[28%] top-[120px] h-[430px] w-[430px] rounded-full bg-cyan-200/30 blur-[125px] dark:bg-cyan-700/10" />
-
         <div className="absolute right-[-160px] top-[170px] h-[520px] w-[520px] rounded-full bg-emerald-300/35 blur-[140px] dark:bg-emerald-700/10" />
-
         <div className="absolute bottom-[-180px] left-[35%] h-[450px] w-[450px] rounded-full bg-sky-200/30 blur-[130px] dark:bg-sky-700/10" />
-
         <div className="absolute left-[48%] top-[42%] h-[280px] w-[280px] rounded-full bg-teal-200/20 blur-[110px] dark:bg-teal-700/10" />
       </div>
 
@@ -395,9 +405,7 @@ export default function Home() {
       <section className="relative mx-auto w-full max-w-7xl overflow-hidden px-5 pb-12 pt-8 lg:px-8 lg:pb-16 lg:pt-10">
         <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[760px] overflow-hidden">
           <div className="absolute left-[5%] top-[10%] h-[350px] w-[350px] rounded-full bg-blue-400/20 blur-[125px] dark:bg-blue-500/10" />
-
           <div className="absolute right-[5%] top-[10%] h-[400px] w-[400px] rounded-full bg-emerald-400/20 blur-[130px] dark:bg-emerald-500/10" />
-
           <div className="absolute left-[42%] top-[30%] h-[300px] w-[300px] rounded-full bg-cyan-300/20 blur-[110px] dark:bg-cyan-500/10" />
         </div>
 
@@ -417,9 +425,7 @@ export default function Home() {
         <div className="relative w-full min-w-0 overflow-hidden rounded-[40px] border border-white/75 bg-white/35 p-2 shadow-[0_30px_100px_rgba(45,100,130,0.12)] backdrop-blur-2xl dark:border-white/[0.08] dark:bg-slate-900/30 dark:shadow-[0_30px_100px_rgba(0,0,0,0.25)]">
           <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[38px]">
             <div className="absolute left-[-100px] top-[-120px] h-[340px] w-[340px] rounded-full bg-blue-400/20 blur-[110px]" />
-
             <div className="absolute right-[-100px] top-[-80px] h-[360px] w-[360px] rounded-full bg-emerald-400/20 blur-[115px]" />
-
             <div className="absolute bottom-[-120px] left-[35%] h-[320px] w-[320px] rounded-full bg-cyan-300/15 blur-[110px]" />
           </div>
 
@@ -428,7 +434,6 @@ export default function Home() {
               <div className="relative min-w-0">
                 <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-white/80 bg-white/75 px-3 py-2 text-[10px] font-semibold text-slate-600 shadow-[0_8px_30px_rgba(70,80,120,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/65 dark:text-slate-300 sm:px-4 sm:text-sm">
                   <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
-
                   <span className="whitespace-nowrap">
                     Rajkiya Engineering College, Ambedkar Nagar
                   </span>
@@ -436,13 +441,10 @@ export default function Home() {
 
                 <h1 className="max-w-3xl text-4xl font-bold leading-[0.98] tracking-[-0.045em] text-slate-950 dark:text-white sm:text-6xl lg:text-7xl">
                   Where
-
                   <span className="relative block bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-500 bg-clip-text pb-3 text-transparent">
                     technology
                   </span>
-
                   meets{" "}
-
                   <span className="tc-innovation">
                     innovation.
                   </span>
@@ -450,9 +452,7 @@ export default function Home() {
 
                 <div className="mt-2 flex items-center gap-2">
                   <span className="h-[3px] w-11 rounded-full bg-blue-500" />
-
                   <span className="h-[3px] w-7 rounded-full bg-cyan-500" />
-
                   <span className="h-[3px] w-5 rounded-full bg-emerald-500" />
                 </div>
 
@@ -559,9 +559,7 @@ export default function Home() {
                 <div className="relative min-w-0 w-full rounded-[34px] bg-gradient-to-br from-blue-300/50 via-cyan-300/30 to-emerald-300/50 p-[1px] shadow-[0_30px_90px_rgba(30,120,130,0.14)] dark:from-blue-500/20 dark:via-cyan-500/15 dark:to-emerald-500/20">
                   <GlassCard className="relative min-h-[390px] min-w-0 w-full overflow-hidden rounded-[33px] p-5 sm:min-h-[410px]">
                     <div className="absolute right-[-50px] top-[-50px] h-52 w-52 rounded-full bg-emerald-300/25 blur-[75px] dark:bg-emerald-700/10" />
-
                     <div className="absolute bottom-[-60px] left-[-50px] h-56 w-56 rounded-full bg-blue-300/25 blur-[75px] dark:bg-blue-700/10" />
-
                     <div className="absolute left-[35%] top-[30%] h-32 w-32 rounded-full bg-cyan-300/20 blur-[65px] dark:bg-cyan-700/10" />
 
                     <div className="relative flex min-h-[360px] min-w-0 flex-col justify-between">
@@ -572,9 +570,7 @@ export default function Home() {
 
                         <div className="flex shrink-0 gap-1.5">
                           <span className="h-2.5 w-2.5 rounded-full bg-red-300 shadow-sm" />
-
                           <span className="h-2.5 w-2.5 rounded-full bg-yellow-300 shadow-sm" />
-
                           <span className="h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-sm" />
                         </div>
                       </div>
@@ -663,64 +659,67 @@ export default function Home() {
           </GlassCard>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            {notices.map((notice, index) => {
-              const hasAttachment =
-                Boolean(notice.attachment_url?.trim()) &&
-                Boolean(notice.attachment_text?.trim()) &&
-                notice.attachment_enabled === true;
+            {notices.map(
+              (notice: Notice, index: number) => {
+                const hasAttachment =
+                  Boolean(
+                    notice.attachment_url?.trim()
+                  ) &&
+                  Boolean(
+                    notice.attachment_text?.trim()
+                  ) &&
+                  notice.attachment_enabled === true;
 
-              return (
-                <GlassCard
-                  key={notice.id}
-                  className="group flex min-h-[190px] flex-col p-4 transition duration-300 hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-900/80"
-                >
-                  {/* TOP ROW — ICON + DATE */}
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                      {index === 0 ? (
-                        <Megaphone size={17} />
-                      ) : (
-                        <CalendarDays size={17} />
+                return (
+                  <GlassCard
+                    key={notice.id}
+                    className="group flex min-h-[190px] flex-col p-4 transition duration-300 hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-900/80"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                        {index === 0 ? (
+                          <Megaphone size={17} />
+                        ) : (
+                          <CalendarDays size={17} />
+                        )}
+                      </div>
+
+                      <span className="text-[9px] font-bold tracking-wide text-slate-400 dark:text-slate-500">
+                        {formatNoticeDate(notice.date)}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 flex items-start justify-between gap-3">
+                      <h3 className="min-w-0 flex-1 text-base font-bold leading-6 text-slate-950 dark:text-white">
+                        {notice.title}
+                      </h3>
+
+                      {hasAttachment && (
+                        <a
+                          href={notice.attachment_url!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex max-w-[45%] shrink-0 items-center gap-1.5 rounded-lg border border-blue-200/80 bg-blue-50/80 px-2.5 py-1.5 text-[9px] font-semibold text-blue-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-100 hover:shadow-md dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/15"
+                        >
+                          <span className="truncate">
+                            {notice.attachment_text}
+                          </span>
+
+                          <ArrowRight
+                            size={11}
+                            className="shrink-0 transition-transform group-hover:translate-x-0.5"
+                          />
+                        </a>
                       )}
                     </div>
 
-                    <span className="text-[9px] font-bold tracking-wide text-slate-400 dark:text-slate-500">
-                      {formatNoticeDate(notice.date)}
-                    </span>
-                  </div>
-
-                  {/* TITLE + VIEW DOCS */}
-                  <div className="mt-4 flex items-start justify-between gap-3">
-                    <h3 className="min-w-0 flex-1 text-base font-bold leading-6 text-slate-950 dark:text-white">
-                      {notice.title}
-                    </h3>
-
-                    {hasAttachment && (
-                      <a
-                        href={notice.attachment_url!}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex max-w-[45%] shrink-0 items-center gap-1.5 rounded-lg border border-blue-200/80 bg-blue-50/80 px-2.5 py-1.5 text-[9px] font-semibold text-blue-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-100 hover:shadow-md dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/15"
-                      >
-                        <span className="truncate">
-                          {notice.attachment_text}
-                        </span>
-
-                        <ArrowRight
-                          size={11}
-                          className="shrink-0 transition-transform group-hover:translate-x-0.5"
-                        />
-                      </a>
-                    )}
-                  </div>
-
-                  {/* DESCRIPTION */}
-                  <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                    {notice.description}
-                  </p>
-                </GlassCard>
-              );
-            })}
+                    <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                      {notice.description}
+                    </p>
+                  </GlassCard>
+                );
+              }
+            )}
 
             {notices.length === 0 && (
               <GlassCard className="p-4 sm:col-span-3">
@@ -770,83 +769,88 @@ export default function Home() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-3">
-          {events.map((event, index) => {
-            const eventDate = formatEventDate(event.date);
+          {events.map(
+            (event: Event, index: number) => {
+              const eventDate = formatEventDate(event.date);
 
-            return (
-              <GlassCard
-                key={event.id}
-                className="group relative overflow-hidden p-5 transition duration-300 hover:-translate-y-1.5"
-              >
-                <div className="absolute right-4 top-3 text-6xl font-black text-slate-100 dark:text-slate-800/70">
-                  0{index + 1}
-                </div>
+              return (
+                <GlassCard
+                  key={event.id}
+                  className="group relative overflow-hidden p-5 transition duration-300 hover:-translate-y-1.5"
+                >
+                  <div className="absolute right-4 top-3 text-6xl font-black text-slate-100 dark:text-slate-800/70">
+                    0{index + 1}
+                  </div>
 
-                <div className="relative">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-[68px] w-[76px] shrink-0 flex-col items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg dark:bg-white dark:text-slate-950">
-                      {index === 0 ? (
-                        <>
-                          <span className="text-xl font-bold leading-none">
-                            {eventDate.day}
-                          </span>
+                  <div className="relative">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-[68px] w-[76px] shrink-0 flex-col items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg dark:bg-white dark:text-slate-950">
+                        {index === 0 ? (
+                          <>
+                            <span className="text-xl font-bold leading-none">
+                              {eventDate.day}
+                            </span>
 
-                          <span className="mt-1 text-[9px] font-semibold uppercase tracking-widest text-slate-300 dark:text-slate-500">
-                            {eventDate.month} {eventDate.year}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-base font-bold uppercase leading-none">
-                            {eventDate.month}
-                          </span>
+                            <span className="mt-1 text-[9px] font-semibold uppercase tracking-widest text-slate-300 dark:text-slate-500">
+                              {eventDate.month}{" "}
+                              {eventDate.year}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-base font-bold uppercase leading-none">
+                              {eventDate.month}
+                            </span>
 
-                          <span className="mt-1 text-[9px] font-semibold tracking-widest text-slate-300 dark:text-slate-500">
-                            {eventDate.year}
+                            <span className="mt-1 text-[9px] font-semibold tracking-widest text-slate-300 dark:text-slate-500">
+                              {eventDate.year}
+                            </span>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 pt-1">
+                        {event.type && (
+                          <span className="relative -left-3 top-2 inline-block max-w-full rounded-full bg-cyan-50 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wide text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-400">
+                            {event.type}
                           </span>
-                        </>
-                      )}
+                        )}
+
+                        <h3 className="mt-3 text-base font-bold text-slate-950 dark:text-white">
+                          {event.title}
+                        </h3>
+                      </div>
                     </div>
 
-                    <div className="min-w-0 pt-1">
-                      {event.type && (
-                        <span className="relative -left-3 top-2 inline-block max-w-full rounded-full bg-cyan-50 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wide text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-400">
-                          {event.type}
+                    <p className="mt-4 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                      {event.description ||
+                        "Stay tuned for more details about this event."}
+                    </p>
+
+                    <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
+                      <div className="flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+                        <CalendarDays size={13} />
+
+                        <span>
+                          REC Ambedkar Nagar
+                          {event.time
+                            ? ` · ${event.time}`
+                            : ""}
                         </span>
-                      )}
+                      </div>
 
-                      <h3 className="mt-3 text-base font-bold text-slate-950 dark:text-white">
-                        {event.title}
-                      </h3>
+                      <Link
+                        href="/events"
+                        className="text-xs font-bold text-slate-900 transition group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400"
+                      >
+                        Details →
+                      </Link>
                     </div>
                   </div>
-
-                  <p className="mt-4 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                    {event.description ||
-                      "Stay tuned for more details about this event."}
-                  </p>
-
-                  <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
-                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500">
-                      <CalendarDays size={13} />
-
-                      <span>
-                        REC Ambedkar Nagar
-                        {event.time ? ` · ${event.time}` : ""}
-                      </span>
-                    </div>
-
-                    <Link
-                      href="/events"
-                      className="text-xs font-bold text-slate-900 transition group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400"
-                    >
-                      Details →
-                    </Link>
-                  </div>
-                </div>
-              </GlassCard>
-            );
-          })}
+                </GlassCard>
+              );
+            }
+          )}
 
           {events.length === 0 && (
             <GlassCard className="p-6 lg:col-span-3">
@@ -969,7 +973,6 @@ export default function Home() {
 
               <h2 className="mt-2 text-3xl font-bold leading-tight text-slate-950 dark:text-white">
                 More than a council.
-
                 <span className="block text-slate-400 dark:text-slate-600">
                   A place to grow.
                 </span>
@@ -1043,7 +1046,6 @@ export default function Home() {
 
               <h2 className="text-3xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-4xl">
                 Have an idea?
-
                 <span className="block text-slate-400 dark:text-slate-600">
                   Let&apos;s make it happen.
                 </span>

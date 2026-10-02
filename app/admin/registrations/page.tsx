@@ -69,6 +69,18 @@ type RegistrationField = {
   display_order: number;
 };
 
+type RegistrationFieldRow = {
+  id?: string;
+  registration_page_id?: string;
+  field_scope: string;
+  field_key: string;
+  field_label: string;
+  field_type: string;
+  required: boolean;
+  options: unknown;
+  display_order: number;
+};
+
 /* =========================================================
    DEFAULT FIELDS
 ========================================================= */
@@ -236,13 +248,15 @@ const DEFAULT_MEMBER_FIELDS: RegistrationField[] = [
 function cloneFields(
   fields: RegistrationField[]
 ): RegistrationField[] {
-  return fields.map((field, index) => ({
-    ...field,
-    id: undefined,
-    registration_page_id: undefined,
-    options: [...field.options],
-    display_order: index,
-  }));
+  return fields.map(
+    (field: RegistrationField, index: number) => ({
+      ...field,
+      id: undefined,
+      registration_page_id: undefined,
+      options: [...field.options],
+      display_order: index,
+    })
+  );
 }
 
 function slugify(value: string) {
@@ -317,7 +331,8 @@ export default function RegistrationsPage() {
 
   const [events, setEvents] = useState<EventItem[]>([]);
   const [pages, setPages] = useState<RegistrationPage[]>([]);
-  const [registrationCounts, setRegistrationCounts] = useState<RegistrationCounts>({});
+  const [registrationCounts, setRegistrationCounts] =
+    useState<RegistrationCounts>({});
 
   const [loading, setLoading] = useState(true);
   const [eventsLoading, setEventsLoading] = useState(true);
@@ -426,7 +441,7 @@ export default function RegistrationsPage() {
       setError(error.message);
       setEvents([]);
     } else {
-      setEvents(data ?? []);
+      setEvents((data ?? []) as EventItem[]);
     }
 
     setEventsLoading(false);
@@ -473,7 +488,9 @@ export default function RegistrationsPage() {
       return;
     }
 
-    const loadedPages = (data ?? []) as RegistrationPage[];
+    const loadedPages =
+      (data ?? []) as RegistrationPage[];
+
     setPages(loadedPages);
 
     if (!loadedPages.length) {
@@ -485,23 +502,37 @@ export default function RegistrationsPage() {
     const counts: RegistrationCounts = {};
 
     await Promise.all(
-      loadedPages.map(async (page) => {
-        if (page.event_type === "individual") {
-          const { count } = await supabase
-            .from("individual_registrations")
-            .select("id", { count: "exact", head: true })
-            .eq("registration_page_id", page.id);
+      loadedPages.map(
+        async (page: RegistrationPage) => {
+          if (page.event_type === "individual") {
+            const { count } = await supabase
+              .from("individual_registrations")
+              .select("id", {
+                count: "exact",
+                head: true,
+              })
+              .eq(
+                "registration_page_id",
+                page.id
+              );
 
-          counts[page.id] = count ?? 0;
-        } else {
-          const { count } = await supabase
-            .from("team_registrations")
-            .select("id", { count: "exact", head: true })
-            .eq("registration_page_id", page.id);
+            counts[page.id] = count ?? 0;
+          } else {
+            const { count } = await supabase
+              .from("team_registrations")
+              .select("id", {
+                count: "exact",
+                head: true,
+              })
+              .eq(
+                "registration_page_id",
+                page.id
+              );
 
-          counts[page.id] = count ?? 0;
+            counts[page.id] = count ?? 0;
+          }
         }
-      })
+      )
     );
 
     setRegistrationCounts(counts);
@@ -542,61 +573,112 @@ export default function RegistrationsPage() {
       throw new Error(error.message);
     }
 
-    const rows: RegistrationField[] = (
-      data ?? []
-    ).map((field) => ({
-      ...field,
-      field_scope:
-        field.field_scope as FieldScope,
-      field_type:
-        field.field_type as FieldType,
-      options: Array.isArray(field.options)
-        ? field.options
-        : [],
-    }));
+    const rawFields =
+      (data ?? []) as RegistrationFieldRow[];
+
+    const rows: RegistrationField[] =
+      rawFields.map(
+        (
+          field: RegistrationFieldRow
+        ): RegistrationField => ({
+          id: field.id,
+          registration_page_id:
+            field.registration_page_id,
+          field_scope:
+            field.field_scope as FieldScope,
+          field_key:
+            field.field_key,
+          field_label:
+            field.field_label,
+          field_type:
+            field.field_type as FieldType,
+          required:
+            field.required,
+          options:
+            Array.isArray(field.options)
+              ? field.options.filter(
+                  (
+                    option: unknown
+                  ): option is string =>
+                    typeof option ===
+                    "string"
+                )
+              : [],
+          display_order:
+            field.display_order,
+        })
+      );
 
     const individual = rows
       .filter(
-        (field) =>
+        (
+          field: RegistrationField
+        ) =>
           field.field_scope ===
           "individual"
       )
-      .map((field, index) => ({
-        ...field,
-        display_order: index,
-      }));
+      .map(
+        (
+          field: RegistrationField,
+          index: number
+        ) => ({
+          ...field,
+          display_order: index,
+        })
+      );
 
     const team = rows
       .filter(
-        (field) =>
+        (
+          field: RegistrationField
+        ) =>
           field.field_scope === "team"
       )
-      .map((field, index) => ({
-        ...field,
-        display_order: index,
-      }));
+      .map(
+        (
+          field: RegistrationField,
+          index: number
+        ) => ({
+          ...field,
+          display_order: index,
+        })
+      );
 
     const leader = rows
       .filter(
-        (field) =>
+        (
+          field: RegistrationField
+        ) =>
           field.field_scope ===
           "team_leader"
       )
-      .map((field, index) => ({
-        ...field,
-        display_order: index,
-      }));
+      .map(
+        (
+          field: RegistrationField,
+          index: number
+        ) => ({
+          ...field,
+          display_order: index,
+        })
+      );
 
     const member = rows
       .filter(
-        (field) =>
+        (
+          field: RegistrationField
+        ) =>
           field.field_scope ===
           "team_member"
       )
-      .map((field, index) => ({
-        ...field,
-        display_order: index,
-      }));
+      .map(
+        (
+          field: RegistrationField,
+          index: number
+        ) => ({
+          ...field,
+          display_order: index,
+        })
+      );
 
     setIndividualFields(
       individual.length
@@ -609,7 +691,9 @@ export default function RegistrationsPage() {
     setTeamFields(
       team.length
         ? team
-        : cloneFields(DEFAULT_TEAM_FIELDS)
+        : cloneFields(
+            DEFAULT_TEAM_FIELDS
+          )
     );
 
     setLeaderFields(
@@ -644,7 +728,7 @@ export default function RegistrationsPage() {
 
   const availableEvents = useMemo(() => {
     return events.filter(
-      (event) =>
+      (event: EventItem) =>
         event.published &&
         isEventDateValid(event.date)
     );
@@ -652,7 +736,7 @@ export default function RegistrationsPage() {
 
   const selectedEvent = useMemo(() => {
     return events.find(
-      (event) =>
+      (event: EventItem) =>
         event.id === selectedEventId
     );
   }, [events, selectedEventId]);
@@ -666,33 +750,41 @@ export default function RegistrationsPage() {
       return pages;
     }
 
-    return pages.filter((page) =>
-      [
-        page.event_name,
-        page.slug,
-        page.event_type,
-        page.status,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query)
+    return pages.filter(
+      (page: RegistrationPage) =>
+        [
+          page.event_name,
+          page.slug,
+          page.event_type,
+          page.status,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(query)
     );
   }, [pages, search]);
 
   const stats = {
     total: pages.length,
     published: pages.filter(
-      (page) =>
+      (page: RegistrationPage) =>
         page.status === "published"
     ).length,
     draft: pages.filter(
-      (page) => page.status === "draft"
+      (page: RegistrationPage) =>
+        page.status === "draft"
     ).length,
     closed: pages.filter(
-      (page) => page.status === "closed"
+      (page: RegistrationPage) =>
+        page.status === "closed"
     ).length,
-    registrations: Object.values(registrationCounts).reduce(
-      (total, count) => total + count,
+    registrations: Object.values(
+      registrationCounts
+    ).reduce(
+      (
+        total: number,
+        count: number
+      ) => total + count,
       0
     ),
   };
@@ -751,7 +843,9 @@ export default function RegistrationsPage() {
             20,
             Math.max(
               1,
-              Number(page.team_member_count) || 1
+              Number(
+                page.team_member_count
+              ) || 1
             )
           )
         : 1
@@ -785,7 +879,7 @@ export default function RegistrationsPage() {
 
   function getFieldsForScope(
     scope: FieldScope
-  ) {
+  ): RegistrationField[] {
     if (scope === "individual") {
       return individualFields;
     }
@@ -851,9 +945,12 @@ export default function RegistrationsPage() {
 
     while (
       fields.some(
-        (field) =>
+        (
+          field: RegistrationField
+        ) =>
           field.field_key === key &&
-          field.id !== editingField?.id
+          field.id !==
+            editingField?.id
       )
     ) {
       key = `${
@@ -920,28 +1017,33 @@ export default function RegistrationsPage() {
       fieldType === "dropdown"
         ? fieldOptions
             .split("\n")
-            .map((option) =>
-              option.trim()
+            .map(
+              (
+                option: string
+              ) => option.trim()
             )
             .filter(Boolean)
         : [];
 
     if (editingField?.id) {
       const updated =
-        fields.map((field) =>
-          field.id ===
-          editingField.id
-            ? {
-                ...field,
-                field_label:
-                  fieldLabel.trim(),
-                field_type:
-                  fieldType,
-                required:
-                  fieldRequired,
-                options,
-              }
-            : field
+        fields.map(
+          (
+            field: RegistrationField
+          ) =>
+            field.id ===
+            editingField.id
+              ? {
+                  ...field,
+                  field_label:
+                    fieldLabel.trim(),
+                  field_type:
+                    fieldType,
+                  required:
+                    fieldRequired,
+                  options,
+                }
+              : field
         );
 
       setFieldsForScope(
@@ -995,7 +1097,9 @@ export default function RegistrationsPage() {
       getFieldsForScope(
         field.field_scope
       ).filter(
-        (item) =>
+        (
+          item: RegistrationField
+        ) =>
           item.id !== field.id &&
           item.field_key !==
             field.field_key
@@ -1004,7 +1108,10 @@ export default function RegistrationsPage() {
     setFieldsForScope(
       field.field_scope,
       fields.map(
-        (item, index) => ({
+        (
+          item: RegistrationField,
+          index: number
+        ) => ({
           ...item,
           display_order:
             index,
@@ -1021,14 +1128,15 @@ export default function RegistrationsPage() {
     pageId: string,
     fields: RegistrationField[]
   ) {
-    const { error: deleteError } =
-      await supabase
-        .from("registration_fields")
-        .delete()
-        .eq(
-          "registration_page_id",
-          pageId
-        );
+    const {
+      error: deleteError,
+    } = await supabase
+      .from("registration_fields")
+      .delete()
+      .eq(
+        "registration_page_id",
+        pageId
+      );
 
     if (deleteError) {
       throw new Error(
@@ -1041,7 +1149,10 @@ export default function RegistrationsPage() {
     }
 
     const payload = fields.map(
-      (field, index) => ({
+      (
+        field: RegistrationField,
+        index: number
+      ) => ({
         registration_page_id:
           pageId,
         field_scope:
@@ -1123,14 +1234,18 @@ export default function RegistrationsPage() {
       let slug = baseSlug;
 
       if (!editingPage) {
-        const { data: existing } =
-          await supabase
-            .from(
-              "registration_pages"
-            )
-            .select("id")
-            .eq("slug", slug)
-            .maybeSingle();
+        const {
+          data: existing,
+        } = await supabase
+          .from(
+            "registration_pages"
+          )
+          .select("id")
+          .eq(
+            "slug",
+            slug
+          )
+          .maybeSingle();
 
         if (existing) {
           slug = `${baseSlug}-${Date.now()}`;
@@ -1139,18 +1254,22 @@ export default function RegistrationsPage() {
         editingPage.slug !==
         slug
       ) {
-        const { data: existing } =
-          await supabase
-            .from(
-              "registration_pages"
-            )
-            .select("id")
-            .eq("slug", slug)
-            .neq(
-              "id",
-              editingPage.id
-            )
-            .maybeSingle();
+        const {
+          data: existing,
+        } = await supabase
+          .from(
+            "registration_pages"
+          )
+          .select("id")
+          .eq(
+            "slug",
+            slug
+          )
+          .neq(
+            "id",
+            editingPage.id
+          )
+          .maybeSingle();
 
         if (existing) {
           slug = `${baseSlug}-${Date.now()}`;
@@ -1171,7 +1290,9 @@ export default function RegistrationsPage() {
                 20,
                 Math.max(
                   1,
-                  Number(teamMemberCount) || 1
+                  Number(
+                    teamMemberCount
+                  ) || 1
                 )
               )
             : 0,
@@ -1252,7 +1373,6 @@ export default function RegistrationsPage() {
         pageId,
         fields
       );
-
 
       await loadPages();
 
@@ -1410,8 +1530,8 @@ export default function RegistrationsPage() {
           ) : (
             fields.map(
               (
-                field,
-                index
+                field: RegistrationField,
+                index: number
               ) => (
                 <div
                   key={
@@ -1490,6 +1610,14 @@ export default function RegistrationsPage() {
      RENDER
   ======================================================= */
 
+  const statItems: [string, number][] = [
+    ["Total Pages", stats.total],
+    ["Published", stats.published],
+    ["Drafts", stats.draft],
+    ["Closed", stats.closed],
+    ["Registrations", stats.registrations],
+  ];
+
   return (
     <div className="min-h-screen px-5 py-8 sm:px-8 lg:px-10">
       <div className="mx-auto max-w-[1500px]">
@@ -1563,33 +1691,11 @@ export default function RegistrationsPage() {
 
         {/* STATS */}
 
-        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            [
-              "Total Pages",
-              stats.total,
-            ],
-            [
-              "Published",
-              stats.published,
-            ],
-            [
-              "Drafts",
-              stats.draft,
-            ],
-            [
-              "Closed",
-              stats.closed,
-            ],
-            [
-              "Registrations",
-              stats.registrations,
-            ],
-          ].map(
-            ([
-              label,
-              value,
-            ]) => (
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          {statItems.map(
+            (
+              [label, value]: [string, number]
+            ) => (
               <div
                 key={label}
                 className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
@@ -1703,7 +1809,9 @@ export default function RegistrationsPage() {
 
                 <tbody>
                   {filteredPages.map(
-                    (page) => (
+                    (
+                      page: RegistrationPage
+                    ) => (
                       <tr
                         key={page.id}
                         className="border-b border-slate-100 last:border-b-0"
@@ -1764,7 +1872,9 @@ export default function RegistrationsPage() {
                             href={`/admin/registrations/${page.id}`}
                             className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
                           >
-                            {registrationCounts[page.id] ?? 0}
+                            {registrationCounts[
+                              page.id
+                            ] ?? 0}
                           </Link>
                         </td>
 
@@ -1871,7 +1981,9 @@ export default function RegistrationsPage() {
 
             <div className="divide-y divide-slate-100 lg:hidden">
               {filteredPages.map(
-                (page) => (
+                (
+                  page: RegistrationPage
+                ) => (
                   <div
                     key={page.id}
                     className="p-5"
@@ -1965,7 +2077,10 @@ export default function RegistrationsPage() {
                         href={`/admin/registrations/${page.id}`}
                         className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700"
                       >
-                        {registrationCounts[page.id] ?? 0} Registrations
+                        {registrationCounts[
+                          page.id
+                        ] ?? 0}{" "}
+                        Registrations
                       </Link>
 
                       <a
@@ -2085,7 +2200,7 @@ export default function RegistrationsPage() {
 
                       {availableEvents.map(
                         (
-                          event
+                          event: EventItem
                         ) => (
                           <option
                             key={
@@ -2255,13 +2370,13 @@ export default function RegistrationsPage() {
                           },
                           (
                             _,
-                            index
+                            index: number
                           ) =>
                             index +
                             1
                         ).map(
                           (
-                            count
+                            count: number
                           ) => (
                             <option
                               key={
@@ -2348,8 +2463,6 @@ export default function RegistrationsPage() {
                   {eventType ===
                     "team" && (
                     <div className="grid gap-4">
-                      {/* TEAM DETAILS */}
-
                       {renderFieldConfiguration(
                         "team",
                         "Team Details",
@@ -2361,8 +2474,6 @@ export default function RegistrationsPage() {
                         />
                       )}
 
-                      {/* TEAM LEADER */}
-
                       {renderFieldConfiguration(
                         "team_leader",
                         "Team Leader Fields",
@@ -2373,8 +2484,6 @@ export default function RegistrationsPage() {
                           }
                         />
                       )}
-
-                      {/* TEAM MEMBERS */}
 
                       {renderFieldConfiguration(
                         "team_member",

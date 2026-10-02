@@ -9,7 +9,6 @@ import {
   ExternalLink,
   FileText,
   ImagePlus,
-  Loader2,
   MessageSquare,
   Plus,
   RefreshCw,
@@ -21,7 +20,17 @@ import {
 
 import Link from "next/link";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import type {
+  AuthChangeEvent,
+  Session,
+} from "@supabase/supabase-js";
 
 import { createClient } from "@/lib/supabase/client";
 
@@ -102,7 +111,11 @@ type NotificationItem = {
   detail: string;
   time: string;
   timestamp: string;
-  type: "notice" | "message" | "application" | "registration";
+  type:
+    | "notice"
+    | "message"
+    | "application"
+    | "registration";
 };
 
 type NoticeOverview = {
@@ -131,7 +144,9 @@ type DashboardStats = {
 };
 
 function parseDateOnly(value: string) {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})$/
+  );
 
   if (match) {
     const [, year, month, day] = match;
@@ -145,7 +160,9 @@ function parseDateOnly(value: string) {
 
   const parsed = new Date(value);
 
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  return Number.isNaN(parsed.getTime())
+    ? null
+    : parsed;
 }
 
 function formatEventDate(value: string) {
@@ -224,28 +241,28 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [admin, setAdmin] = useState<AdminProfile | null>(null);
+  const [admin, setAdmin] =
+    useState<AdminProfile | null>(null);
 
-  const [stats, setStats] = useState<DashboardStats>({
-    publishedNotices: 0,
-    upcomingEvents: 0,
-    teamMembers: 0,
-    unreadMessages: 0,
-  });
+  const [stats, setStats] =
+    useState<DashboardStats>({
+      publishedNotices: 0,
+      upcomingEvents: 0,
+      teamMembers: 0,
+      unreadMessages: 0,
+    });
 
-  const [upcomingEvents, setUpcomingEvents] = useState<
-    UpcomingEvent[]
-  >([]);
+  const [upcomingEvents, setUpcomingEvents] =
+    useState<UpcomingEvent[]>([]);
 
-  const [recentMessages, setRecentMessages] = useState<
-    MessageRow[]
-  >([]);
+  const [recentMessages, setRecentMessages] =
+    useState<MessageRow[]>([]);
 
-  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [activities, setActivities] =
+    useState<ActivityItem[]>([]);
 
-  const [notifications, setNotifications] = useState<
-    NotificationItem[]
-  >([]);
+  const [notifications, setNotifications] =
+    useState<NotificationItem[]>([]);
 
   const [noticeOverview, setNoticeOverview] =
     useState<NoticeOverview>({
@@ -289,12 +306,7 @@ export default function AdminDashboardPage() {
         /*
          * Supabase can briefly report no session while the browser
          * is restoring the authenticated session after login or a
-         * refresh. Read the session directly and retry briefly.
-         *
-         * AdminSessionGuard + middleware are responsible for the
-         * actual admin-session lifecycle. The dashboard should not
-         * force a logout merely because client-side auth restoration
-         * is a little late.
+         * refresh.
          */
         for (let attempt = 0; attempt < 12; attempt += 1) {
           const {
@@ -320,12 +332,10 @@ export default function AdminDashboardPage() {
         }
 
         /*
-         * Do not crash, redirect, or display a false session-expired
-         * error when the browser has not restored the client session
-         * yet. The auth-state listener below will retry dashboard
-         * loading when Supabase emits INITIAL_SESSION/SIGNED_IN.
+         * Do not crash, redirect, or display a false
+         * session-expired error when the browser has not
+         * restored the client session yet.
          */
-
         if (!user) {
           setLoading(false);
           setRefreshing(false);
@@ -356,7 +366,6 @@ export default function AdminDashboardPage() {
         ] = await Promise.all([
           profilePromise,
 
-          // Notices
           supabase
             .from("notices")
             .select(
@@ -366,7 +375,6 @@ export default function AdminDashboardPage() {
               ascending: false,
             }),
 
-          // Published events
           supabase
             .from("events")
             .select(
@@ -377,13 +385,11 @@ export default function AdminDashboardPage() {
               ascending: false,
             }),
 
-          // Published team
           supabase
             .from("tc_team")
             .select("id, section")
             .eq("published", true),
 
-          // Unread messages count
           supabase
             .from("contact_messages")
             .select("id", {
@@ -392,7 +398,6 @@ export default function AdminDashboardPage() {
             })
             .eq("status", "unread"),
 
-          // Latest messages
           supabase
             .from("contact_messages")
             .select(
@@ -403,7 +408,6 @@ export default function AdminDashboardPage() {
             })
             .limit(4),
 
-          // Latest recruitment applications
           supabase
             .from("recruitment_applications")
             .select(
@@ -414,7 +418,6 @@ export default function AdminDashboardPage() {
             })
             .limit(4),
 
-          // Latest individual registrations
           supabase
             .from("individual_registrations")
             .select(
@@ -425,7 +428,6 @@ export default function AdminDashboardPage() {
             })
             .limit(4),
 
-          // Latest team registrations
           supabase
             .from("team_registrations")
             .select(
@@ -441,7 +443,10 @@ export default function AdminDashboardPage() {
 
         const recordQueryError = (
           label: string,
-          queryError: { message?: string; code?: string | null } | null
+          queryError: {
+            message?: string;
+            code?: string | null;
+          } | null
         ) => {
           if (!queryError) {
             return;
@@ -452,7 +457,10 @@ export default function AdminDashboardPage() {
             : "";
 
           errors.push(
-            `${label}: ${queryError.message || "Unknown Supabase error"}${code}`
+            `${label}: ${
+              queryError.message ||
+              "Unknown Supabase error"
+            }${code}`
           );
 
           console.error(
@@ -461,20 +469,46 @@ export default function AdminDashboardPage() {
           );
         };
 
-        recordQueryError("admin profile", profileResult.error);
-        recordQueryError("notices", noticesResult.error);
-        recordQueryError("events", eventsResult.error);
-        recordQueryError("team", teamResult.error);
-        recordQueryError("unread messages", unreadResult.error);
-        recordQueryError("recent messages", messagesResult.error);
+        recordQueryError(
+          "admin profile",
+          profileResult.error
+        );
+
+        recordQueryError(
+          "notices",
+          noticesResult.error
+        );
+
+        recordQueryError(
+          "events",
+          eventsResult.error
+        );
+
+        recordQueryError(
+          "team",
+          teamResult.error
+        );
+
+        recordQueryError(
+          "unread messages",
+          unreadResult.error
+        );
+
+        recordQueryError(
+          "recent messages",
+          messagesResult.error
+        );
+
         recordQueryError(
           "recruitment applications",
           applicationsResult.error
         );
+
         recordQueryError(
           "individual registrations",
           individualRegistrationsResult.error
         );
+
         recordQueryError(
           "team registrations",
           teamRegistrationsResult.error
@@ -487,16 +521,20 @@ export default function AdminDashboardPage() {
         }
 
         const allNotices =
-          (noticesResult.data ?? []) as NoticeRow[];
+          (noticesResult.data ??
+            []) as NoticeRow[];
 
         const allEvents =
-          (eventsResult.data ?? []) as EventRow[];
+          (eventsResult.data ??
+            []) as EventRow[];
 
         const allTeamMembers =
-          (teamResult.data ?? []) as TeamRow[];
+          (teamResult.data ??
+            []) as TeamRow[];
 
         const allMessages =
-          (messagesResult.data ?? []) as MessageRow[];
+          (messagesResult.data ??
+            []) as MessageRow[];
 
         const applications =
           (applicationsResult.data ??
@@ -674,7 +712,8 @@ export default function AdminDashboardPage() {
               time: formatRelativeTime(
                 event.created_at
               ),
-              timestamp: event.created_at,
+              timestamp:
+                event.created_at,
               type: "event" as const,
             })),
 
@@ -714,7 +753,6 @@ export default function AdminDashboardPage() {
          */
 
         const notificationItems: NotificationItem[] = [
-          // Notices
           ...allNotices.map(
             (notice) => ({
               id: `notification-notice-${notice.id}`,
@@ -733,7 +771,6 @@ export default function AdminDashboardPage() {
             })
           ),
 
-          // Messages
           ...allMessages.map(
             (message) => ({
               id: `notification-message-${message.id}`,
@@ -750,7 +787,6 @@ export default function AdminDashboardPage() {
             })
           ),
 
-          // Recruitment applications
           ...applications.map(
             (application) => ({
               id: `notification-application-${application.id}`,
@@ -766,7 +802,6 @@ export default function AdminDashboardPage() {
             })
           ),
 
-          // Individual registrations
           ...individualRegistrations.map(
             (registration) => ({
               id: `notification-individual-registration-${registration.id}`,
@@ -785,7 +820,6 @@ export default function AdminDashboardPage() {
             })
           ),
 
-          // Team registrations
           ...teamRegistrations.map(
             (registration) => ({
               id: `notification-team-registration-${registration.id}`,
@@ -886,7 +920,9 @@ export default function AdminDashboardPage() {
 
         if (errors.length > 0) {
           setError(
-            `Some dashboard data could not be loaded. ${errors.join(" • ")}`
+            `Some dashboard data could not be loaded. ${errors.join(
+              " • "
+            )}`
           );
         }
       } catch (err) {
@@ -906,18 +942,33 @@ export default function AdminDashboardPage() {
     []
   );
 
+  /*
+   * --------------------------------------------------------
+   * AUTH INITIALIZATION
+   * --------------------------------------------------------
+   */
+
   useEffect(() => {
     let mounted = true;
     let initializationFinished = false;
 
     /*
-     * Register the auth listener first so that a session restored
-     * immediately after the page mounts cannot be missed.
+     * Register the auth listener first so a session restored
+     * immediately after mount cannot be missed.
+     *
+     * IMPORTANT:
+     * AuthChangeEvent and Session are explicitly typed here.
+     * This fixes the TypeScript build error:
+     *
+     * Parameter 'event' implicitly has an 'any' type.
      */
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (
+        event: AuthChangeEvent,
+        session: Session | null
+      ) => {
         if (!mounted) {
           return;
         }
@@ -930,8 +981,7 @@ export default function AdminDashboardPage() {
         ) {
           /*
            * Supabase recommends not starting another auth request
-           * synchronously inside the auth-state callback. Queue it
-           * for the next task instead.
+           * synchronously inside the auth-state callback.
            */
           window.setTimeout(() => {
             if (mounted) {
@@ -944,28 +994,23 @@ export default function AdminDashboardPage() {
 
         /*
          * Only an actual Supabase sign-out should send
-         * the user to the login page from this listener.
+         * the user to the login page.
          */
         if (event === "SIGNED_OUT") {
-          window.location.replace("/login");
+          window.location.replace(
+            "/login"
+          );
         }
       }
     );
 
-    /*
-     * Load immediately if a session is already available.
-     *
-     * The previous implementation checked getSession() only once.
-     * Right after login/refresh, Supabase may still be restoring the
-     * browser session. In that case the dashboard never called
-     * loadDashboard(), which made every card appear empty.
-     *
-     * Retry the session lookup for a short, bounded period so the
-     * dashboard reliably waits for the client session.
-     */
     async function initializeDashboard() {
       try {
-        for (let attempt = 0; attempt < 12; attempt += 1) {
+        for (
+          let attempt = 0;
+          attempt < 12;
+          attempt += 1
+        ) {
           if (!mounted) {
             return;
           }
@@ -989,17 +1034,17 @@ export default function AdminDashboardPage() {
           }
 
           await new Promise((resolve) =>
-            window.setTimeout(resolve, 250)
+            window.setTimeout(
+              resolve,
+              250
+            )
           );
         }
 
-        if (mounted && !initializationFinished) {
-          /*
-           * Do not show an authentication error here. Middleware and
-           * AdminSessionGuard own the admin-session lifecycle. If the
-           * session is restored later, INITIAL_SESSION/TOKEN_REFRESHED
-           * will trigger loadDashboard().
-           */
+        if (
+          mounted &&
+          !initializationFinished
+        ) {
           setLoading(false);
         }
       } catch (err) {
@@ -1010,6 +1055,7 @@ export default function AdminDashboardPage() {
 
         if (mounted) {
           setLoading(false);
+
           console.error(
             "Dashboard session initialization failed; waiting for auth state:",
             err
@@ -1034,9 +1080,10 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     const channel = supabase
-      .channel("admin-dashboard-live")
+      .channel(
+        "admin-dashboard-live"
+      )
 
-      // Events
       .on(
         "postgres_changes",
         {
@@ -1049,7 +1096,6 @@ export default function AdminDashboardPage() {
         }
       )
 
-      // Notices
       .on(
         "postgres_changes",
         {
@@ -1062,7 +1108,6 @@ export default function AdminDashboardPage() {
         }
       )
 
-      // Messages
       .on(
         "postgres_changes",
         {
@@ -1075,7 +1120,6 @@ export default function AdminDashboardPage() {
         }
       )
 
-      // Team
       .on(
         "postgres_changes",
         {
@@ -1088,7 +1132,6 @@ export default function AdminDashboardPage() {
         }
       )
 
-      // Recruitment applications
       .on(
         "postgres_changes",
         {
@@ -1101,7 +1144,6 @@ export default function AdminDashboardPage() {
         }
       )
 
-      // Individual event registrations
       .on(
         "postgres_changes",
         {
@@ -1114,7 +1156,6 @@ export default function AdminDashboardPage() {
         }
       )
 
-      // Team event registrations
       .on(
         "postgres_changes",
         {
@@ -1159,7 +1200,9 @@ export default function AdminDashboardPage() {
       .split(" ")
       .filter(Boolean)
       .slice(0, 2)
-      .map((part) => part[0])
+      .map(
+        (part) => part[0]
+      )
       .join("")
       .toUpperCase();
   }, [admin]);
@@ -1189,19 +1232,20 @@ export default function AdminDashboardPage() {
                 type="button"
                 onClick={() =>
                   setShowNotifications(
-                    (current) => !current
+                    (current) =>
+                      !current
                   )
                 }
                 className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
               >
                 <Bell className="h-4.5 w-4.5" />
 
-                {stats.unreadMessages > 0 && (
+                {stats.unreadMessages >
+                  0 && (
                   <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
                 )}
               </button>
 
-              {/* Notifications */}
               {showNotifications && (
                 <div className="absolute right-0 top-12 z-50 w-[330px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
 
@@ -1220,7 +1264,9 @@ export default function AdminDashboardPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        setShowNotifications(false)
+                        setShowNotifications(
+                          false
+                        )
                       }
                       className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                       aria-label="Close notifications"
@@ -1230,14 +1276,16 @@ export default function AdminDashboardPage() {
 
                   </div>
 
-                  {/* No scrollbar — exactly 4 notifications */}
                   <div className="overflow-hidden">
 
-                    {notifications.length > 0 ? (
+                    {notifications.length >
+                    0 ? (
                       notifications
                         .slice(0, 4)
                         .map(
-                          (notification) => (
+                          (
+                            notification
+                          ) => (
                             <div
                               key={
                                 notification.id
@@ -1392,7 +1440,9 @@ export default function AdminDashboardPage() {
               <button
                 type="button"
                 onClick={() =>
-                  void loadDashboard(true)
+                  void loadDashboard(
+                    true
+                  )
                 }
                 disabled={refreshing}
                 className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur-md transition hover:border-slate-300 hover:bg-white hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
@@ -1410,7 +1460,9 @@ export default function AdminDashboardPage() {
               <button
                 type="button"
                 onClick={() =>
-                  setShowQuickActions(true)
+                  setShowQuickActions(
+                    true
+                  )
                 }
                 className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-500 px-4 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-500/25"
               >
@@ -1432,7 +1484,9 @@ export default function AdminDashboardPage() {
             <button
               type="button"
               onClick={() =>
-                void loadDashboard(true)
+                void loadDashboard(
+                  true
+                )
               }
               className="shrink-0 font-bold underline underline-offset-2"
             >
@@ -1473,7 +1527,9 @@ export default function AdminDashboardPage() {
 
           <StatCard
             label="Team Members"
-            value={stats.teamMembers}
+            value={
+              stats.teamMembers
+            }
             description="Published profiles"
             icon={
               <Users className="h-5 w-5" />
@@ -1546,7 +1602,9 @@ export default function AdminDashboardPage() {
                             {
                               formatShortDate(
                                 event.date
-                              ).split(" ")[1]
+                              ).split(
+                                " "
+                              )[1]
                             }
                           </span>
 
@@ -1554,7 +1612,9 @@ export default function AdminDashboardPage() {
                             {
                               formatShortDate(
                                 event.date
-                              ).split(" ")[0]
+                              ).split(
+                                " "
+                              )[0]
                             }
                           </span>
 
@@ -1817,21 +1877,21 @@ export default function AdminDashboardPage() {
               <div className="relative mb-4 flex items-end justify-between overflow-hidden rounded-2xl border border-white/80 bg-white/75 p-5 shadow-[0_20px_60px_-25px_rgba(15,23,42,0.18)] backdrop-blur-2xl">
 
                 <div className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-blue-200/30 blur-3xl" />
-              
+
                 <div className="pointer-events-none absolute -bottom-12 -left-8 h-24 w-24 rounded-full bg-emerald-200/25 blur-3xl" />
-              
+
                 <div className="relative z-10">
                   <p className="text-xs font-medium text-slate-400">
                     Total published members
                   </p>
-              
+
                   <p className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
                     {teamOverview.total}
                   </p>
                 </div>
-              
+
                 <Users className="relative z-10 h-8 w-8 text-slate-400" />
-              
+
               </div>
 
               <div className="space-y-2">
@@ -1877,7 +1937,7 @@ export default function AdminDashboardPage() {
 
           </div>
 
-          {/* Website Health — improved */}
+          {/* Website Health */}
           <div className="xl:col-span-4">
 
             <DashboardCard
@@ -1894,7 +1954,6 @@ export default function AdminDashboardPage() {
 
                 <div className="relative">
 
-                  {/* Main status */}
                   <div className="flex items-center justify-between">
 
                     <div className="flex items-center gap-2.5">
@@ -1917,7 +1976,6 @@ export default function AdminDashboardPage() {
 
                   </div>
 
-                  {/* Health overview */}
                   <div className="mt-5 grid grid-cols-2 gap-2.5">
 
                     <div className="rounded-xl border border-emerald-100 bg-white/75 p-3">
@@ -1994,7 +2052,6 @@ export default function AdminDashboardPage() {
 
                   </div>
 
-                  {/* Bottom actions */}
                   <div className="mt-4 flex items-center justify-between gap-3 border-t border-emerald-100/80 pt-4">
 
                     <div>
@@ -2004,7 +2061,6 @@ export default function AdminDashboardPage() {
                       </p>
 
                       <p className="mt-1 text-xs font-semibold text-emerald-800">
-
                         {lastSynced
                           ? lastSynced.toLocaleTimeString(
                               "en-IN",
@@ -2014,7 +2070,6 @@ export default function AdminDashboardPage() {
                               }
                             )
                           : "—"}
-
                       </p>
 
                     </div>
@@ -2169,7 +2224,9 @@ export default function AdminDashboardPage() {
             <button
               type="button"
               onClick={() =>
-                setShowQuickActions(true)
+                setShowQuickActions(
+                  true
+                )
               }
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-slate-800"
             >
@@ -2189,14 +2246,14 @@ export default function AdminDashboardPage() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
           onMouseDown={(event) => {
-
             if (
               event.target ===
               event.currentTarget
             ) {
-              setShowQuickActions(false);
+              setShowQuickActions(
+                false
+              );
             }
-
           }}
         >
 
@@ -2231,7 +2288,9 @@ export default function AdminDashboardPage() {
               <button
                 type="button"
                 onClick={() =>
-                  setShowQuickActions(false)
+                  setShowQuickActions(
+                    false
+                  )
                 }
                 className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
               >

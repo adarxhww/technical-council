@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
 import {
   X,
   Send,
@@ -63,7 +64,6 @@ type FormResponse = {
 };
 
 type FieldValue = string | string[];
-
 type FieldValues = Record<string, FieldValue>;
 
 export default function JoinModal({
@@ -198,6 +198,7 @@ export default function JoinModal({
 
         setForm(result.form);
         setFields(loadedFields);
+
         setValues(
           createInitialValues(
             loadedFields
@@ -248,11 +249,10 @@ export default function JoinModal({
     fieldKey: string,
     option: string
   ) => {
-    const current = Array.isArray(
-      values[fieldKey]
-    )
-      ? values[fieldKey]
-      : [];
+    const current: string[] =
+      Array.isArray(values[fieldKey])
+        ? values[fieldKey]
+        : [];
 
     updateValue(
       fieldKey,
@@ -278,7 +278,7 @@ export default function JoinModal({
   const getResumeAccept = () => {
     const types =
       form?.allowed_resume_types || [
-        "pdf",        
+        "pdf",
       ];
 
     return types
@@ -307,7 +307,7 @@ export default function JoinModal({
     const allowedTypes =
       form?.allowed_resume_types || [
         "pdf",
-         ];
+      ];
 
     const fileExtension =
       file.name
@@ -358,7 +358,6 @@ export default function JoinModal({
 
     setResumeName(file.name);
 
-    // Keep the field value controlled as well.
     updateValue(
       field.field_key,
       file.name
@@ -428,11 +427,18 @@ export default function JoinModal({
           field.field_key
         );
 
-        const selected =
-          Array.isArray(
-            values[field.field_key]
-          )
-            ? values[field.field_key]
+        const fieldValue =
+          values[field.field_key];
+
+        const selected: string[] =
+          Array.isArray(fieldValue)
+            ? fieldValue.filter(
+                (
+                  value
+                ): value is string =>
+                  typeof value ===
+                  "string"
+              )
             : [];
 
         selected.forEach((value) => {
@@ -495,10 +501,8 @@ export default function JoinModal({
       setError("");
       setResumeName("");
 
-      // Reset the actual HTML form.
       formElement.reset();
 
-      // Reset React-controlled values too.
       setValues(
         createInitialValues(fields)
       );
