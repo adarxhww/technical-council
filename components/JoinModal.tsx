@@ -249,9 +249,18 @@ export default function JoinModal({
     fieldKey: string,
     option: string
   ) => {
+    const fieldValue =
+      values[fieldKey];
+
     const current: string[] =
-      Array.isArray(values[fieldKey])
-        ? values[fieldKey]
+      Array.isArray(fieldValue)
+        ? fieldValue.filter(
+            (
+              value
+            ): value is string =>
+              typeof value ===
+              "string"
+          )
         : [];
 
     updateValue(
@@ -275,19 +284,12 @@ export default function JoinModal({
       : undefined;
   };
 
-  const getResumeAccept = () => {
-    const types =
-      form?.allowed_resume_types || [
-        "pdf",
-      ];
+  // ---------------------------------------------------------
+  // PDF ONLY
+  // ---------------------------------------------------------
 
-    return types
-      .map((type) =>
-        type.startsWith(".")
-          ? type
-          : `.${type}`
-      )
-      .join(",");
+  const getResumeAccept = () => {
+    return ".pdf,application/pdf";
   };
 
   const handleFileChange = (
@@ -301,13 +303,16 @@ export default function JoinModal({
 
     if (!file) {
       setResumeName("");
+      updateValue(
+        field.field_key,
+        ""
+      );
       return;
     }
 
-    const allowedTypes =
-      form?.allowed_resume_types || [
-        "pdf",
-      ];
+    // -------------------------------------------------------
+    // PDF extension validation
+    // -------------------------------------------------------
 
     const fileExtension =
       file.name
@@ -315,29 +320,48 @@ export default function JoinModal({
         .pop()
         ?.toLowerCase() || "";
 
-    const normalizedAllowedTypes =
-      allowedTypes.map((type) =>
-        type
-          .replace(".", "")
-          .toLowerCase()
-      );
-
-    if (
-      !normalizedAllowedTypes.includes(
-        fileExtension
-      )
-    ) {
+    if (fileExtension !== "pdf") {
       event.target.value = "";
       setResumeName("");
 
+      updateValue(
+        field.field_key,
+        ""
+      );
+
       setError(
-        `Please upload an allowed file type: ${normalizedAllowedTypes.join(
-          ", "
-        )}.`
+        "Please upload a PDF file only."
       );
 
       return;
     }
+
+    // -------------------------------------------------------
+    // PDF MIME type validation
+    // -------------------------------------------------------
+
+    if (
+      file.type &&
+      file.type !== "application/pdf"
+    ) {
+      event.target.value = "";
+      setResumeName("");
+
+      updateValue(
+        field.field_key,
+        ""
+      );
+
+      setError(
+        "Please upload a valid PDF file only."
+      );
+
+      return;
+    }
+
+    // -------------------------------------------------------
+    // Maximum file size
+    // -------------------------------------------------------
 
     const maxSizeMb =
       form?.resume_max_size_mb || 5;
@@ -349,12 +373,21 @@ export default function JoinModal({
       event.target.value = "";
       setResumeName("");
 
+      updateValue(
+        field.field_key,
+        ""
+      );
+
       setError(
         `File size must be ${maxSizeMb} MB or less.`
       );
 
       return;
     }
+
+    // -------------------------------------------------------
+    // Valid PDF
+    // -------------------------------------------------------
 
     setResumeName(file.name);
 
@@ -412,7 +445,10 @@ export default function JoinModal({
       const formData =
         new FormData(formElement);
 
+      // -----------------------------------------------------
       // Controlled checkbox / multiselect values
+      // -----------------------------------------------------
+
       fields.forEach((field) => {
         if (
           field.field_type !==
@@ -815,7 +851,8 @@ export default function JoinModal({
               (!Array.isArray(
                 value
               ) ||
-                value.length === 0) && (
+                value.length ===
+                  0) && (
                 <input
                   tabIndex={-1}
                   required
@@ -831,7 +868,7 @@ export default function JoinModal({
         );
 
       // -----------------------------------------------------
-      // FILE
+      // FILE — PDF ONLY
       // -----------------------------------------------------
 
       case "file":
@@ -883,20 +920,7 @@ export default function JoinModal({
                     </p>
                   ) : (
                     <p className="mt-2 text-xs text-slate-400">
-                      {(
-                        form.allowed_resume_types ||
-                        []
-                      )
-                        .map(
-                          (
-                            type
-                          ) =>
-                            type.toUpperCase()
-                        )
-                        .join(
-                          ", "
-                        )}{" "}
-                      · Maximum{" "}
+                      PDF · Maximum{" "}
                       {
                         form.resume_max_size_mb
                       }{" "}

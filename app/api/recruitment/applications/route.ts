@@ -174,121 +174,119 @@ export async function POST(request: Request) {
     }
 
     // --------------------------------------------------
-    // Resume handling
-    // --------------------------------------------------
+// Resume handling
+// --------------------------------------------------
 
-    let resumePath: string | null = null;
-    let resumeName: string | null = null;
-    let resumeType: string | null = null;
-    let resumeSize: number | null = null;
+let resumePath: string | null = null;
+let resumeName: string | null = null;
+let resumeType: string | null = null;
+let resumeSize: number | null = null;
 
-    if (resume instanceof File && resume.size > 0) {
-      const maxSizeMb =
-        Number(recruitmentForm.resume_max_size_mb) || 5;
+if (resume instanceof File && resume.size > 0) {
+  const maxSizeMb =
+    Number(recruitmentForm.resume_max_size_mb) || 5;
 
-      const maxSizeBytes =
-        maxSizeMb * 1024 * 1024;
+  const maxSizeBytes =
+    maxSizeMb * 1024 * 1024;
 
-      // Size validation
-      if (resume.size > maxSizeBytes) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: `Resume must be smaller than ${maxSizeMb} MB.`,
-          },
-          { status: 400 }
-        );
-      }
+  // Size validation
+  if (resume.size > maxSizeBytes) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: `Resume must be smaller than ${maxSizeMb} MB.`,
+      },
+      { status: 400 }
+    );
+  }
 
-      // Extension validation
-      const extension = getFileExtension(
-        resume.name
-      );
+  // --------------------------------------------------
+  // PDF ONLY
+  // --------------------------------------------------
 
-      const allowedTypes = Array.isArray(
-        recruitmentForm.allowed_resume_types
-      )
-        ? recruitmentForm.allowed_resume_types.map(
-            (type: unknown) =>
-              String(type).toLowerCase()
-          )
-        : ["pdf", "doc", "docx"];
+  const extension = getFileExtension(
+    resume.name
+  );
 
-      if (
-        !extension ||
-        !allowedTypes.includes(extension)
-      ) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: `Invalid resume format. Allowed formats: ${allowedTypes.join(
-              ", "
-            )}.`,
-          },
-          { status: 400 }
-        );
-      }
+  const normalizedExtension =
+    extension.toLowerCase();
 
-      // Upload
-      const safeName = sanitizeFileName(
-        resume.name
-      );
+  const isPdfExtension =
+    normalizedExtension === "pdf";
 
-      const fileName = `${crypto.randomUUID()}-${safeName}`;
+  const isPdfMimeType =
+    resume.type === "application/pdf";
 
-      const storagePath =
-        `applications/${fileName}`;
+  if (!isPdfExtension || !isPdfMimeType) {
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          "Invalid resume format. Only PDF files are allowed.",
+      },
+      { status: 400 }
+    );
+  }
 
-      const fileBuffer =
-        await resume.arrayBuffer();
+  // Upload
+  const safeName = sanitizeFileName(
+    resume.name
+  );
 
-      const { error: uploadError } =
-        await supabaseAdmin.storage
-          .from("recruitment-resumes")
-          .upload(
-            storagePath,
-            fileBuffer,
-            {
-              contentType:
-                resume.type ||
-                "application/octet-stream",
-              upsert: false,
-            }
-          );
+  const fileName =
+    `${crypto.randomUUID()}-${safeName}`;
 
-      if (uploadError) {
-        console.error(
-          "Resume upload error:",
-          uploadError
-        );
+  const storagePath =
+    `applications/${fileName}`;
 
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              "Failed to upload resume.",
-          },
-          { status: 500 }
-        );
-      }
+  const fileBuffer =
+    await resume.arrayBuffer();
 
-      resumePath = storagePath;
-      uploadedResumePath = storagePath;
-      resumeName = resume.name;
-      resumeType =
-        resume.type || extension;
-      resumeSize = resume.size;
-    } else if (
-      recruitmentForm.resume_required
-    ) {
-      return NextResponse.json(
+  const { error: uploadError } =
+    await supabaseAdmin.storage
+      .from("recruitment-resumes")
+      .upload(
+        storagePath,
+        fileBuffer,
         {
-          success: false,
-          message: "Resume is required.",
-        },
-        { status: 400 }
+          contentType:
+            "application/pdf",
+          upsert: false,
+        }
       );
-    }
+
+  if (uploadError) {
+    console.error(
+      "Resume upload error:",
+      uploadError
+    );
+
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          "Failed to upload resume.",
+      },
+      { status: 500 }
+    );
+  }
+
+  resumePath = storagePath;
+  uploadedResumePath = storagePath;
+  resumeName = resume.name;
+  resumeType = "application/pdf";
+  resumeSize = resume.size;
+} else if (
+  recruitmentForm.resume_required
+) {
+  return NextResponse.json(
+    {
+      success: false,
+      message: "Resume is required.",
+    },
+    { status: 400 }
+  );
+}
 
     // --------------------------------------------------
     // Custom answers
