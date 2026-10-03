@@ -4,7 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 
 import { CalendarDays } from "lucide-react";
 
-import { EventCard, type EventItem } from "@/components/EventCard";
+import {
+  EventCard,
+  type EventItem,
+  type EventButtonColor,
+  type EventButtonType,
+} from "@/components/EventCard";
 
 import { createClient } from "@/lib/supabase/client";
 
@@ -19,11 +24,16 @@ type SupabaseEvent = {
   type: string;
   description: string;
   published: boolean;
+  registration_page_id: string | null;
+
+  button_type: EventButtonType | null;
+  custom_button_text: string | null;
+  custom_button_color: EventButtonColor | null;
+  custom_button_link: string | null;
 };
 
 type RegistrationPage = {
   id: string;
-  event_id: string | null;
   slug: string;
   status: "draft" | "published" | "closed";
 };
@@ -46,13 +56,37 @@ export default function EventsPage() {
     setLoading(true);
     setError("");
 
+    /*
+     * Fetch public events.
+     *
+     * IMPORTANT:
+     * Event date is used ONLY for the
+     * All / Upcoming / Completed filters.
+     *
+     * The event button is controlled manually
+     * through the button fields.
+     */
     const {
       data: eventData,
       error: eventError,
     } = await supabase
       .from("events")
       .select(
-        "id, title, date, time, location, type, description, published"
+        [
+          "id",
+          "title",
+          "date",
+          "time",
+          "location",
+          "type",
+          "description",
+          "published",
+          "registration_page_id",
+          "button_type",
+          "custom_button_text",
+          "custom_button_color",
+          "custom_button_link",
+        ].join(", ")
       )
       .eq("published", true)
       .order("date", {
@@ -60,19 +94,30 @@ export default function EventsPage() {
       });
 
     if (eventError) {
-      console.error("Public events error:", eventError);
+      console.error(
+        "Public events error:",
+        eventError
+      );
+
       setError("Unable to load events.");
       setEvents([]);
       setLoading(false);
+
       return;
     }
 
+    /*
+     * Fetch published registration pages.
+     *
+     * The event's registration_page_id determines
+     * which registration form belongs to Register Now.
+     */
     const {
       data: registrationData,
       error: registrationError,
     } = await supabase
       .from("registration_pages")
-      .select("id, event_id, slug, status")
+      .select("id, slug, status")
       .eq("status", "published");
 
     if (registrationError) {
@@ -91,18 +136,40 @@ export default function EventsPage() {
     >();
 
     registrations.forEach((registration) => {
-      if (registration.event_id) {
-        registrationMap.set(
-          registration.event_id,
-          registration
-        );
-      }
+      registrationMap.set(
+        registration.id,
+        registration
+      );
     });
 
     const mappedEvents: EventItem[] = (
       (eventData ?? []) as SupabaseEvent[]
     ).map((event) => {
-      const registration = registrationMap.get(event.id);
+      /*
+       * Select only the registration page explicitly
+       * linked to this event.
+       */
+      const registration = event.registration_page_id
+        ? registrationMap.get(
+            event.registration_page_id
+          )
+        : undefined;
+
+      /*
+       * Normalize the button configuration.
+       *
+       * If the database contains an old/invalid custom
+       * configuration without custom text, treat it as
+       * Register Now instead of rendering an empty button.
+       */
+      const hasCustomButtonText =
+        Boolean(event.custom_button_text?.trim());
+
+      const buttonType: EventButtonType =
+        event.button_type === "custom" &&
+        !hasCustomButtonText
+          ? "register_now"
+          : event.button_type ?? "register_now";
 
       return {
         id: event.id,
@@ -122,23 +189,39 @@ export default function EventsPage() {
         description: event.description,
 
         /*
-         * IMPORTANT:
-         * Keep the database time as the actual `time`
+         * Keep the database time as the actual time
          * property so EventCard can display it.
          */
         time: event.time,
 
         /*
-         * Keep duration available as well so no existing
-         * EventCard data structure is unnecessarily removed.
+         * Keep duration available as well.
          */
         duration: event.time,
 
         venue: event.location,
 
+        /*
+         * Register Now uses the registration page
+         * explicitly linked to this event.
+         */
         link: registration
           ? `/events/${registration.slug}/register`
           : undefined,
+
+        /*
+         * Manual button configuration.
+         */
+        buttonType,
+
+        customButtonText:
+          event.custom_button_text,
+
+        customButtonColor:
+          event.custom_button_color,
+
+        customButtonLink:
+          event.custom_button_link,
       };
     });
 
@@ -146,6 +229,11 @@ export default function EventsPage() {
     setLoading(false);
   }
 
+  /*
+   * DATE FILTERING ONLY
+   *
+   * This does NOT control the event button.
+   */
   const today = new Date();
 
   const filteredEvents = events.filter((event) => {
@@ -301,7 +389,9 @@ function parseEventDate(value: string) {
 
   // ISO date: 2026-09-15
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const parsed = new Date(`${value}T23:59:59`);
+    const parsed = new Date(
+      `${value}T23:59:59`
+    );
 
     return Number.isNaN(parsed.getTime())
       ? null

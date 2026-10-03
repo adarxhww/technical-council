@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+
 import {
   ArrowLeft,
   CalendarDays,
@@ -19,6 +20,15 @@ import {
 
 import { createClient } from "@/lib/supabase/client";
 
+type ButtonType =
+  | "register_now"
+  | "upcoming"
+  | "closed"
+  | "ended"
+  | "custom";
+
+type ButtonColor = "register" | "ended";
+
 type EventItem = {
   id: string;
   title: string;
@@ -28,12 +38,29 @@ type EventItem = {
   type: string;
   description: string;
   published: boolean;
+
+  button_type: ButtonType;
+  custom_button_text: string | null;
+  custom_button_color: ButtonColor | null;
+  custom_button_link: string | null;
+
+  registration_page_id: string | null;
+};
+
+type RegistrationPage = {
+  id: string;
+  slug: string;
+  status: "draft" | "published" | "closed";
 };
 
 export default function EventsPage() {
   const supabase = useMemo(() => createClient(), []);
 
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [registrationPages, setRegistrationPages] = useState<
+    RegistrationPage[]
+  >([]);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -50,8 +77,26 @@ export default function EventsPage() {
   const [type, setType] = useState("");
   const [description, setDescription] = useState("");
 
+  // Registration form
+  const [registrationPageId, setRegistrationPageId] =
+    useState("");
+
+  // Public button configuration
+  const [buttonType, setButtonType] =
+    useState<ButtonType>("register_now");
+
+  const [customButtonText, setCustomButtonText] =
+    useState("");
+
+  const [customButtonColor, setCustomButtonColor] =
+    useState<ButtonColor>("register");
+
+  const [customButtonLink, setCustomButtonLink] =
+    useState("");
+
   useEffect(() => {
     loadEvents();
+    loadRegistrationPages();
   }, []);
 
   async function loadEvents() {
@@ -61,7 +106,21 @@ export default function EventsPage() {
     const { data, error } = await supabase
       .from("events")
       .select(
-        "id, title, date, time, location, type, description, published"
+        [
+          "id",
+          "title",
+          "date",
+          "time",
+          "location",
+          "type",
+          "description",
+          "published",
+          "button_type",
+          "custom_button_text",
+          "custom_button_color",
+          "custom_button_link",
+          "registration_page_id",
+        ].join(", ")
       )
       .order("date", {
         ascending: true,
@@ -78,6 +137,30 @@ export default function EventsPage() {
     setLoading(false);
   }
 
+  async function loadRegistrationPages() {
+    const { data, error } = await supabase
+      .from("registration_pages")
+      .select("id, slug, status")
+      .in("status", ["published", "closed"])
+      .order("slug", {
+        ascending: true,
+      });
+
+    if (error) {
+      console.error(
+        "Registration pages load error:",
+        error
+      );
+
+      setRegistrationPages([]);
+      return;
+    }
+
+    setRegistrationPages(
+      (data ?? []) as RegistrationPage[]
+    );
+  }
+
   function resetForm() {
     setTitle("");
     setDate("");
@@ -85,15 +168,25 @@ export default function EventsPage() {
     setLocation("");
     setType("");
     setDescription("");
+
+    setRegistrationPageId("");
+
+    setButtonType("register_now");
+    setCustomButtonText("");
+    setCustomButtonColor("register");
+    setCustomButtonLink("");
+
     setEditingEvent(null);
   }
 
   function openAddModal() {
     resetForm();
+    setError("");
     setShowModal(true);
   }
 
   function openEditModal(event: EventItem) {
+    setError("");
     setEditingEvent(event);
 
     setTitle(event.title);
@@ -102,6 +195,26 @@ export default function EventsPage() {
     setLocation(event.location);
     setType(event.type);
     setDescription(event.description);
+
+    setRegistrationPageId(
+      event.registration_page_id ?? ""
+    );
+
+    setButtonType(
+      event.button_type ?? "register_now"
+    );
+
+    setCustomButtonText(
+      event.custom_button_text ?? ""
+    );
+
+    setCustomButtonColor(
+      event.custom_button_color ?? "register"
+    );
+
+    setCustomButtonLink(
+      event.custom_button_link ?? ""
+    );
 
     setShowModal(true);
   }
@@ -119,6 +232,12 @@ export default function EventsPage() {
     const cleanType = type.trim();
     const cleanDescription = description.trim();
 
+    const cleanCustomButtonText =
+      customButtonText.trim();
+
+    const cleanCustomButtonLink =
+      customButtonLink.trim();
+
     if (
       !cleanTitle ||
       !cleanDate ||
@@ -127,31 +246,97 @@ export default function EventsPage() {
       !cleanType ||
       !cleanDescription
     ) {
+      setError(
+        "Please fill in all required event fields."
+      );
+      return;
+    }
+
+    if (
+      buttonType === "custom" &&
+      (!cleanCustomButtonText ||
+        !cleanCustomButtonLink)
+    ) {
+      setError(
+        "Custom button text and custom button link are required."
+      );
       return;
     }
 
     setSaving(true);
     setError("");
 
+    /*
+     * Button data is stored independently from the
+     * registration form relationship.
+     */
+    const buttonData = {
+      button_type: buttonType,
+
+      custom_button_text:
+        buttonType === "custom"
+          ? cleanCustomButtonText
+          : null,
+
+      custom_button_color:
+        buttonType === "custom"
+          ? customButtonColor
+          : null,
+
+      custom_button_link:
+        buttonType === "custom"
+          ? cleanCustomButtonLink
+          : null,
+    };
+
+    const eventData = {
+      title: cleanTitle,
+      date: cleanDate,
+      time: cleanTime,
+      location: cleanLocation,
+      type: cleanType,
+      description: cleanDescription,
+
+      /*
+       * Registration relationship stays independent
+       * from the public button type.
+       */
+      registration_page_id:
+        registrationPageId || null,
+
+      ...buttonData,
+    };
+
     if (editingEvent) {
       const { data, error } = await supabase
         .from("events")
-        .update({
-          title: cleanTitle,
-          date: cleanDate,
-          time: cleanTime,
-          location: cleanLocation,
-          type: cleanType,
-          description: cleanDescription,
-        })
+        .update(eventData)
         .eq("id", editingEvent.id)
         .select(
-          "id, title, date, time, location, type, description, published"
+          [
+            "id",
+            "title",
+            "date",
+            "time",
+            "location",
+            "type",
+            "description",
+            "published",
+            "button_type",
+            "custom_button_text",
+            "custom_button_color",
+            "custom_button_link",
+            "registration_page_id",
+          ].join(", ")
         )
         .single();
 
       if (error) {
-        console.error("Event update error:", error);
+        console.error(
+          "Event update error:",
+          error
+        );
+
         setError(error.message);
         setSaving(false);
         return;
@@ -168,27 +353,43 @@ export default function EventsPage() {
       const { data, error } = await supabase
         .from("events")
         .insert({
-          title: cleanTitle,
-          date: cleanDate,
-          time: cleanTime,
-          location: cleanLocation,
-          type: cleanType,
-          description: cleanDescription,
+          ...eventData,
           published: false,
         })
         .select(
-          "id, title, date, time, location, type, description, published"
+          [
+            "id",
+            "title",
+            "date",
+            "time",
+            "location",
+            "type",
+            "description",
+            "published",
+            "button_type",
+            "custom_button_text",
+            "custom_button_color",
+            "custom_button_link",
+            "registration_page_id",
+          ].join(", ")
         )
         .single();
 
       if (error) {
-        console.error("Event create error:", error);
+        console.error(
+          "Event create error:",
+          error
+        );
+
         setError(error.message);
         setSaving(false);
         return;
       }
 
-      setEvents((current) => [...current, data as EventItem]);
+      setEvents((current) => [
+        ...current,
+        data as EventItem,
+      ]);
     }
 
     setSaving(false);
@@ -208,7 +409,11 @@ export default function EventsPage() {
       .eq("id", event.id);
 
     if (error) {
-      console.error("Event publish update error:", error);
+      console.error(
+        "Event publish update error:",
+        error
+      );
+
       setError(error.message);
       return;
     }
@@ -242,13 +447,19 @@ export default function EventsPage() {
       .eq("id", event.id);
 
     if (error) {
-      console.error("Event delete error:", error);
+      console.error(
+        "Event delete error:",
+        error
+      );
+
       setError(error.message);
       return;
     }
 
     setEvents((current) =>
-      current.filter((item) => item.id !== event.id)
+      current.filter(
+        (item) => item.id !== event.id
+      )
     );
   }
 
@@ -256,23 +467,38 @@ export default function EventsPage() {
     (event) => event.published
   ).length;
 
-  const hiddenCount = events.length - publishedCount;
+  const hiddenCount =
+    events.length - publishedCount;
 
-  const filteredEvents = events.filter((event) => {
-    const query = search.toLowerCase().trim();
+  const filteredEvents = events.filter(
+    (event) => {
+      const query = search
+        .toLowerCase()
+        .trim();
 
-    if (!query) {
-      return true;
+      if (!query) {
+        return true;
+      }
+
+      return (
+        event.title
+          .toLowerCase()
+          .includes(query) ||
+        event.type
+          .toLowerCase()
+          .includes(query) ||
+        event.location
+          .toLowerCase()
+          .includes(query) ||
+        event.date
+          .toLowerCase()
+          .includes(query) ||
+        event.description
+          .toLowerCase()
+          .includes(query)
+      );
     }
-
-    return (
-      event.title.toLowerCase().includes(query) ||
-      event.type.toLowerCase().includes(query) ||
-      event.location.toLowerCase().includes(query) ||
-      event.date.toLowerCase().includes(query) ||
-      event.description.toLowerCase().includes(query)
-    );
-  });
+  );
 
   return (
     <div className="min-h-screen w-full bg-transparent">
@@ -397,8 +623,7 @@ export default function EventsPage() {
                 </h2>
 
                 <p className="mt-1 text-xs text-slate-500">
-                  Manage events displayed across the Technical Council
-                  website.
+                  Manage events displayed across the Technical Council website.
                 </p>
               </div>
 
@@ -482,6 +707,34 @@ export default function EventsPage() {
                             <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-500">
                               {event.description}
                             </p>
+
+                            {/* Registration form status */}
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                Registration
+                              </span>
+
+                              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                                {getRegistrationPageLabel(
+                                  event.registration_page_id,
+                                  registrationPages
+                                )}
+                              </span>
+                            </div>
+
+                            {/* Button status */}
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                Public Button
+                              </span>
+
+                              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-600">
+                                {getButtonTypeLabel(
+                                  event.button_type,
+                                  event.custom_button_text
+                                )}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
@@ -579,7 +832,9 @@ export default function EventsPage() {
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/30 p-5 backdrop-blur-sm"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
+            if (
+              event.target === event.currentTarget
+            ) {
               closeModal();
             }
           }}
@@ -594,8 +849,7 @@ export default function EventsPage() {
                 </h2>
 
                 <p className="mt-1 text-xs text-slate-500">
-                  Add event information for the Technical Council
-                  website.
+                  Add event information for the Technical Council website.
                 </p>
               </div>
 
@@ -610,6 +864,7 @@ export default function EventsPage() {
             </div>
 
             <div className="max-h-[70vh] space-y-5 overflow-y-auto p-5">
+              {/* Event Title */}
               <div>
                 <label
                   htmlFor="event-title"
@@ -630,6 +885,7 @@ export default function EventsPage() {
                 />
               </div>
 
+              {/* Date + Time */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label
@@ -670,6 +926,7 @@ export default function EventsPage() {
                 </div>
               </div>
 
+              {/* Location + Type */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label
@@ -710,6 +967,7 @@ export default function EventsPage() {
                 </div>
               </div>
 
+              {/* Description */}
               <div>
                 <label
                   htmlFor="event-description"
@@ -722,12 +980,349 @@ export default function EventsPage() {
                   id="event-description"
                   value={description}
                   onChange={(event) =>
-                    setDescription(event.target.value)
+                    setDescription(
+                      event.target.value
+                    )
                   }
                   rows={4}
                   placeholder="Write a short description of the event..."
                   className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-500/[0.08]"
                 />
+              </div>
+
+              {/* REGISTRATION FORM */}
+              <div className="border-t border-slate-100 pt-5">
+                <div className="mb-3">
+                  <p className="text-sm font-semibold text-slate-900">
+                    Registration Form
+                  </p>
+
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Select the registration form that should open when this event uses the Register Now button.
+                  </p>
+                </div>
+
+                <select
+                  value={registrationPageId}
+                  onChange={(event) =>
+                    setRegistrationPageId(
+                      event.target.value
+                    )
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-500/[0.08]"
+                >
+                  <option value="">
+                    No registration form linked
+                  </option>
+
+                  {registrationPages.map(
+                    (registrationPage) => (
+                      <option
+                        key={registrationPage.id}
+                        value={registrationPage.id}
+                      >
+                        {registrationPage.slug}
+                        {registrationPage.status ===
+                        "closed"
+                          ? " — Closed"
+                          : ""}
+                      </option>
+                    )
+                  )}
+                </select>
+
+                {registrationPages.length === 0 && (
+                  <p className="mt-2 text-xs text-amber-600">
+                    No published or closed registration forms are available.
+                  </p>
+                )}
+
+                {registrationPageId && (
+                  <p className="mt-2 text-xs text-slate-400">
+                    The selected form remains linked to this event even if the public button is changed to Upcoming, Closed, Ended, or Custom.
+                  </p>
+                )}
+              </div>
+
+              {/* PUBLIC BUTTON CONFIGURATION */}
+              <div className="border-t border-slate-100 pt-5">
+                <div className="mb-3">
+                  <p className="text-sm font-semibold text-slate-900">
+                    Public Event Button
+                  </p>
+
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Choose manually which button visitors should see. The event date does not change this button.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {/* Register Now */}
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:bg-white">
+                    <input
+                      type="radio"
+                      name="button-type"
+                      value="register_now"
+                      checked={
+                        buttonType ===
+                        "register_now"
+                      }
+                      onChange={() =>
+                        setButtonType(
+                          "register_now"
+                        )
+                      }
+                      className="h-4 w-4 accent-blue-600"
+                    />
+
+                    <span className="text-sm font-semibold text-slate-700">
+                      Register Now
+                    </span>
+
+                    <span className="ml-auto rounded-full bg-gradient-to-r from-blue-600 to-emerald-500 px-3 py-1 text-[10px] font-bold text-white">
+                      Register Now →
+                    </span>
+                  </label>
+
+                  {/* Upcoming */}
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:bg-white">
+                    <input
+                      type="radio"
+                      name="button-type"
+                      value="upcoming"
+                      checked={
+                        buttonType ===
+                        "upcoming"
+                      }
+                      onChange={() =>
+                        setButtonType(
+                          "upcoming"
+                        )
+                      }
+                      className="h-4 w-4 accent-blue-600"
+                    />
+
+                    <span className="text-sm font-semibold text-slate-700">
+                      Upcoming
+                    </span>
+
+                    <span className="ml-auto rounded-full bg-gradient-to-r from-blue-600 to-emerald-500 px-3 py-1 text-[10px] font-bold text-white">
+                      Upcoming
+                    </span>
+                  </label>
+
+                  {/* Closed */}
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:bg-white">
+                    <input
+                      type="radio"
+                      name="button-type"
+                      value="closed"
+                      checked={
+                        buttonType ===
+                        "closed"
+                      }
+                      onChange={() =>
+                        setButtonType(
+                          "closed"
+                        )
+                      }
+                      className="h-4 w-4 accent-blue-600"
+                    />
+
+                    <span className="text-sm font-semibold text-slate-700">
+                      Closed
+                    </span>
+
+                    <span className="ml-auto rounded-full bg-slate-500 px-3 py-1 text-[10px] font-bold text-white">
+                      Closed
+                    </span>
+                  </label>
+
+                  {/* Ended */}
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:bg-white">
+                    <input
+                      type="radio"
+                      name="button-type"
+                      value="ended"
+                      checked={
+                        buttonType ===
+                        "ended"
+                      }
+                      onChange={() =>
+                        setButtonType(
+                          "ended"
+                        )
+                      }
+                      className="h-4 w-4 accent-blue-600"
+                    />
+
+                    <span className="text-sm font-semibold text-slate-700">
+                      Ended
+                    </span>
+
+                    <span className="ml-auto rounded-full bg-slate-500 px-3 py-1 text-[10px] font-bold text-white">
+                      Ended
+                    </span>
+                  </label>
+
+                  {/* Custom */}
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:bg-white">
+                    <input
+                      type="radio"
+                      name="button-type"
+                      value="custom"
+                      checked={
+                        buttonType ===
+                        "custom"
+                      }
+                      onChange={() =>
+                        setButtonType(
+                          "custom"
+                        )
+                      }
+                      className="h-4 w-4 accent-blue-600"
+                    />
+
+                    <span className="text-sm font-semibold text-slate-700">
+                      Custom
+                    </span>
+
+                    <span className="ml-auto rounded-full bg-gradient-to-r from-blue-600 to-emerald-500 px-3 py-1 text-[10px] font-bold text-white">
+                      Custom
+                    </span>
+                  </label>
+                </div>
+
+                {/* Custom Button Settings */}
+                {buttonType === "custom" && (
+                  <div className="mt-4 space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    {/* Custom Text */}
+                    <div>
+                      <label
+                        htmlFor="custom-button-text"
+                        className="mb-2 block text-xs font-semibold text-slate-500"
+                      >
+                        Button Text
+                      </label>
+
+                      <input
+                        id="custom-button-text"
+                        value={customButtonText}
+                        onChange={(event) =>
+                          setCustomButtonText(
+                            event.target.value
+                          )
+                        }
+                        placeholder="e.g. View Details"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/[0.08]"
+                      />
+                    </div>
+
+                    {/* Custom Link */}
+                    <div>
+                      <label
+                        htmlFor="custom-button-link"
+                        className="mb-2 block text-xs font-semibold text-slate-500"
+                      >
+                        Button Link / Action
+                      </label>
+
+                      <input
+                        id="custom-button-link"
+                        value={customButtonLink}
+                        onChange={(event) =>
+                          setCustomButtonLink(
+                            event.target.value
+                          )
+                        }
+                        placeholder="e.g. https://example.com"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/[0.08]"
+                      />
+                    </div>
+
+                    {/* Custom Color */}
+                    <div>
+                      <p className="mb-2 text-xs font-semibold text-slate-500">
+                        Button Color
+                      </p>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
+                          <input
+                            type="radio"
+                            name="custom-button-color"
+                            value="register"
+                            checked={
+                              customButtonColor ===
+                              "register"
+                            }
+                            onChange={() =>
+                              setCustomButtonColor(
+                                "register"
+                              )
+                            }
+                            className="h-4 w-4 accent-blue-600"
+                          />
+
+                          <div className="flex min-w-0 flex-1 flex-col gap-2">
+                            <span className="text-xs font-semibold text-slate-700">
+                              Register Now Color
+                            </span>
+
+                            <span className="h-7 w-full rounded-full bg-gradient-to-r from-blue-600 to-emerald-500" />
+                          </div>
+                        </label>
+
+                        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
+                          <input
+                            type="radio"
+                            name="custom-button-color"
+                            value="ended"
+                            checked={
+                              customButtonColor ===
+                              "ended"
+                            }
+                            onChange={() =>
+                              setCustomButtonColor(
+                                "ended"
+                              )
+                            }
+                            className="h-4 w-4 accent-blue-600"
+                          />
+
+                          <div className="flex min-w-0 flex-1 flex-col gap-2">
+                            <span className="text-xs font-semibold text-slate-700">
+                              Ended Color
+                            </span>
+
+                            <span className="h-7 w-full rounded-full bg-slate-500" />
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Preview */}
+                    <div className="border-t border-slate-200 pt-4">
+                      <p className="mb-2 text-xs font-semibold text-slate-500">
+                        Preview
+                      </p>
+
+                      <div className="flex items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white p-5">
+                        <div
+                          className={`flex h-12 w-[150px] items-center justify-center rounded-full text-sm font-bold text-white shadow-md ${
+                            customButtonColor ===
+                            "ended"
+                              ? "bg-slate-500"
+                              : "bg-gradient-to-r from-blue-600 to-emerald-500"
+                          }`}
+                        >
+                          {customButtonText.trim() ||
+                            "Enter Button Text"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -750,7 +1345,10 @@ export default function EventsPage() {
                   !time.trim() ||
                   !location.trim() ||
                   !type.trim() ||
-                  !description.trim()
+                  !description.trim() ||
+                  (buttonType === "custom" &&
+                    (!customButtonText.trim() ||
+                      !customButtonLink.trim()))
                 }
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-emerald-600 hover:to-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
@@ -768,12 +1366,61 @@ export default function EventsPage() {
   );
 }
 
+function getButtonTypeLabel(
+  buttonType: ButtonType | null | undefined,
+  customButtonText?: string | null
+) {
+  switch (buttonType) {
+    case "register_now":
+      return "Register Now";
+
+    case "upcoming":
+      return "Upcoming";
+
+    case "closed":
+      return "Closed";
+
+    case "ended":
+      return "Ended";
+
+    case "custom":
+      return customButtonText?.trim()
+        ? `Custom: ${customButtonText.trim()}`
+        : "Custom";
+
+    default:
+      return "Register Now";
+  }
+}
+
+function getRegistrationPageLabel(
+  registrationPageId: string | null,
+  registrationPages: RegistrationPage[]
+) {
+  if (!registrationPageId) {
+    return "Not linked";
+  }
+
+  const registrationPage =
+    registrationPages.find(
+      (page) => page.id === registrationPageId
+    );
+
+  if (!registrationPage) {
+    return "Linked form unavailable";
+  }
+
+  return registrationPage.slug;
+}
+
 function formatDisplayDate(value: string) {
   if (!value) {
     return "";
   }
 
-  const parsed = new Date(`${value}T00:00:00`);
+  const parsed = new Date(
+    `${value}T00:00:00`
+  );
 
   if (!Number.isNaN(parsed.getTime())) {
     return parsed.toLocaleDateString("en-GB", {
