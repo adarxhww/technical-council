@@ -1266,7 +1266,7 @@ export default function EventsPage() {
 
                           <div className="flex min-w-0 flex-1 flex-col gap-2">
                             <span className="text-xs font-semibold text-slate-700">
-                              Register Now Color
+                              Color 1
                             </span>
 
                             <span className="h-7 w-full rounded-full bg-gradient-to-r from-blue-600 to-emerald-500" />
@@ -1292,7 +1292,7 @@ export default function EventsPage() {
 
                           <div className="flex min-w-0 flex-1 flex-col gap-2">
                             <span className="text-xs font-semibold text-slate-700">
-                              Ended Color
+                              Color 2
                             </span>
 
                             <span className="h-7 w-full rounded-full bg-slate-500" />
