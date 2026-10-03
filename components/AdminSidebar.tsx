@@ -10,6 +10,7 @@ import {
   Loader2,
   LogOut,
   Mail,
+  Menu,
   Settings,
   Users,
   X,
@@ -18,6 +19,7 @@ import {
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+
 import { createClient } from "@/lib/supabase/client";
 
 type SidebarItemProps = {
@@ -40,9 +42,11 @@ type AdminProfile = {
 
 export default function AdminSidebar({
   open,
+  onOpen,
   onClose,
 }: {
   open: boolean;
+  onOpen: () => void;
   onClose: () => void;
 }) {
   const pathname = usePathname();
@@ -54,28 +58,39 @@ export default function AdminSidebar({
   const [unreadMessages, setUnreadMessages] = useState(0);
 
   /*
+   * Mobile navbar visibility.
+   *
+   * true  = visible
+   * false = hidden while scrolling down
+   */
+  const [navbarVisible, setNavbarVisible] = useState(true);
+
+  /*
    * Create the Supabase client once for this sidebar instance.
-   * This prevents the effects below from re-running unnecessarily.
    */
   const [supabase] = useState(() => createClient());
 
   /*
-   * General sidebar active state.
+   * ==========================================================
+   * GENERAL ACTIVE STATE
+   * ==========================================================
    */
+
   const isActive = (href: string) => {
     if (href === "/admin") {
       return pathname === "/admin";
     }
 
-    return pathname === href || pathname.startsWith(`${href}/`);
+    return (
+      pathname === href ||
+      pathname.startsWith(`${href}/`)
+    );
   };
 
   /*
-   * Registration-specific active states.
-   *
-   * IMPORTANT:
-   * /admin/registrations/[id]
-   * is a MONITORING detail page, not a Create Registration page.
+   * ==========================================================
+   * REGISTRATION ACTIVE STATES
+   * ==========================================================
    */
 
   const isCreateRegistrationActive =
@@ -84,14 +99,104 @@ export default function AdminSidebar({
 
   const isMonitorRegistrationActive =
     pathname === "/admin/registration-monitoring" ||
-    (
-      pathname.startsWith("/admin/registrations/") &&
-      pathname !== "/admin/registrations/create"
-    );
+    (pathname.startsWith("/admin/registrations/") &&
+      pathname !== "/admin/registrations/create");
 
   /*
-   * Load logged-in admin profile.
+   * ==========================================================
+   * MOBILE NAVBAR SCROLL BEHAVIOR
+   * ==========================================================
+   *
+   * Scroll down -> hide
+   * Scroll up   -> show
+   * At top      -> always show
    */
+
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    let ticking = false;
+
+    const handleScroll = () => {
+      if (ticking) {
+        return;
+      }
+
+      ticking = true;
+
+      window.requestAnimationFrame(() => {
+        const currentScrollY = window.scrollY;
+        const difference = currentScrollY - lastScrollY;
+
+        /*
+         * Always show navbar at the top.
+         */
+        if (currentScrollY <= 10) {
+          setNavbarVisible(true);
+
+          if (open) {
+            onClose();
+          }
+
+          lastScrollY = currentScrollY;
+          ticking = false;
+          return;
+        }
+
+        /*
+         * Ignore tiny movements.
+         */
+        if (Math.abs(difference) >= 8) {
+          if (difference > 0) {
+            // Scrolling DOWN
+            setNavbarVisible(false);
+
+            if (open) {
+              onClose();
+            }
+          } else {
+            // Scrolling UP
+            setNavbarVisible(true);
+          }
+
+          lastScrollY = currentScrollY;
+        }
+
+        ticking = false;
+      });
+    };
+
+    window.addEventListener("scroll", handleScroll, {
+      passive: true,
+    });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, [open, onClose]);
+
+  /*
+   * ==========================================================
+   * ROUTE CHANGE
+   * ==========================================================
+   *
+   * IMPORTANT:
+   * `open` is intentionally NOT a dependency here.
+   *
+   * Otherwise clicking the hamburger would:
+   * open the menu -> effect runs -> menu closes immediately.
+   */
+
+  useEffect(() => {
+    setNavbarVisible(true);
+    onClose();
+  }, [pathname, onClose]);
+
+  /*
+   * ==========================================================
+   * LOAD ADMIN PROFILE
+   * ==========================================================
+   */
+
   useEffect(() => {
     let mounted = true;
 
@@ -107,17 +212,23 @@ export default function AdminSidebar({
           if (mounted) {
             setAdmin(null);
           }
+
           return;
         }
 
         const { data: profile, error } = await supabase
           .from("admin_profiles")
-          .select("id, name, email, role, status, avatar_url")
+          .select(
+            "id, name, email, role, status, avatar_url"
+          )
           .eq("id", user.id)
           .maybeSingle();
 
         if (error) {
-          console.error("Unable to load admin profile:", error);
+          console.error(
+            "Unable to load admin profile:",
+            error
+          );
 
           if (mounted) {
             setAdmin(null);
@@ -130,7 +241,10 @@ export default function AdminSidebar({
           setAdmin(profile);
         }
       } catch (error) {
-        console.error("Admin profile loading error:", error);
+        console.error(
+          "Admin profile loading error:",
+          error
+        );
 
         if (mounted) {
           setAdmin(null);
@@ -150,8 +264,11 @@ export default function AdminSidebar({
   }, [supabase]);
 
   /*
-   * Load unread message count.
+   * ==========================================================
+   * LOAD UNREAD MESSAGE COUNT
+   * ==========================================================
    */
+
   useEffect(() => {
     let mounted = true;
 
@@ -196,10 +313,7 @@ export default function AdminSidebar({
     loadUnreadMessageCount();
 
     /*
-     * Realtime updates:
-     * - New message
-     * - Message marked read
-     * - Message deleted
+     * Realtime updates.
      */
     const channel = supabase
       .channel("admin-sidebar-messages")
@@ -217,7 +331,7 @@ export default function AdminSidebar({
       .subscribe();
 
     /*
-     * Refresh when returning to the browser tab.
+     * Refresh when returning to browser tab.
      */
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -243,8 +357,11 @@ export default function AdminSidebar({
   }, [supabase]);
 
   /*
-   * Logout.
+   * ==========================================================
+   * LOGOUT
+   * ==========================================================
    */
+
   async function handleLogout() {
     if (loggingOut) {
       return;
@@ -253,12 +370,17 @@ export default function AdminSidebar({
     setLoggingOut(true);
 
     try {
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-      });
+      const response = await fetch(
+        "/api/auth/logout",
+        {
+          method: "POST",
+        }
+      );
 
       if (!response.ok) {
-        const result = await response.json().catch(() => null);
+        const result = await response
+          .json()
+          .catch(() => null);
 
         throw new Error(
           result?.error ?? "Unable to log out."
@@ -285,6 +407,12 @@ export default function AdminSidebar({
     }
   }
 
+  /*
+   * ==========================================================
+   * DISPLAY DATA
+   * ==========================================================
+   */
+
   const displayName =
     admin?.name?.trim() || "Administrator";
 
@@ -296,32 +424,385 @@ export default function AdminSidebar({
 
   return (
     <>
+      {/* =====================================================
+          MOBILE NAVBAR
+          ===================================================== */}
+
+      <header
+        className={`
+          fixed
+          left-3
+          right-3
+          top-3
+          z-[60]
+          lg:hidden
+          transition-transform
+          duration-300
+          ease-out
+          ${
+            navbarVisible
+              ? "translate-y-0"
+              : "-translate-y-[calc(100%+1rem)]"
+          }
+        `}
+      >
+        <div
+          className="
+            flex
+            min-h-[66px]
+            items-center
+            justify-between
+            rounded-[24px]
+            border
+            border-white/70
+            bg-white/80
+            px-3
+            py-2.5
+            shadow-[0_14px_45px_rgba(36,63,120,0.08)]
+            backdrop-blur-2xl
+          "
+        >
+          {/* Logo + Brand */}
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div
+              className="
+                flex
+                h-10
+                w-10
+                shrink-0
+                items-center
+                justify-center
+                overflow-hidden
+                rounded-[13px]
+                bg-white
+                shadow-[0_8px_22px_rgba(79,124,255,0.12)]
+              "
+            >
+              <img
+                src="/images/logo.png"
+                alt="Technical Council"
+                className="h-full w-full object-contain"
+              />
+            </div>
+
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-[14px] font-extrabold tracking-tight text-slate-950">
+                Technical Council
+              </p>
+
+              <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.13em] text-slate-400">
+                Admin Portal
+              </p>
+            </div>
+          </div>
+
+          {/* Hamburger */}
+          <button
+            type="button"
+            onClick={() => {
+              if (open) {
+                onClose();
+              } else {
+                setNavbarVisible(true);
+                onOpen();
+              }
+            }}
+            aria-label={
+              open
+                ? "Close navigation"
+                : "Open navigation"
+            }
+            className="
+              grid
+              h-10
+              w-10
+              shrink-0
+              place-items-center
+              rounded-full
+              border
+              border-slate-900/[0.07]
+              bg-white/80
+              text-slate-700
+              shadow-sm
+              transition
+              hover:bg-white
+            "
+          >
+            {open ? <X size={19} /> : <Menu size={19} />}
+          </button>
+        </div>
+
+        {/* =================================================
+            MOBILE MENU
+            ================================================= */}
+
+        {open && (
+          <div
+            className="
+              mt-2
+              max-h-[calc(100vh-98px)]
+              overflow-y-auto
+              rounded-[24px]
+              border
+              border-white/70
+              bg-white/90
+              p-3
+              shadow-[0_20px_60px_rgba(15,23,42,0.12)]
+              backdrop-blur-2xl
+            "
+          >
+            {/* Workspace */}
+            <p className="mb-2 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+              Workspace
+            </p>
+
+            <div className="space-y-1">
+              <SidebarItem
+                icon={LayoutDashboard}
+                label="Dashboard"
+                href="/admin"
+                active={isActive("/admin")}
+                onClick={onClose}
+              />
+
+              <SidebarItem
+                icon={UserPlus}
+                label="Applications"
+                href="/admin/applications"
+                active={isActive(
+                  "/admin/applications"
+                )}
+                onClick={onClose}
+              />
+
+              <SidebarItem
+                icon={Bell}
+                label="Notices"
+                href="/admin/notices"
+                active={isActive(
+                  "/admin/notices"
+                )}
+                onClick={onClose}
+              />
+
+              <SidebarItem
+                icon={CalendarDays}
+                label="Events"
+                href="/admin/events"
+                active={isActive(
+                  "/admin/events"
+                )}
+                onClick={onClose}
+              />
+
+              <SidebarItem
+                icon={Users}
+                label="Team"
+                href="/admin/team"
+                active={isActive(
+                  "/admin/team"
+                )}
+                onClick={onClose}
+              />
+
+              <SidebarItem
+                icon={ImageIcon}
+                label="Gallery"
+                href="/admin/gallery"
+                active={isActive(
+                  "/admin/gallery"
+                )}
+                onClick={onClose}
+              />
+            </div>
+
+            {/* Registration */}
+            <p className="mb-2 mt-6 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+              Registration
+            </p>
+
+            <div className="space-y-1">
+              <SidebarItem
+                icon={FilePlus2}
+                label="Create Registration Page"
+                href="/admin/registrations"
+                active={isCreateRegistrationActive}
+                onClick={onClose}
+              />
+
+              <SidebarItem
+                icon={ClipboardList}
+                label="Monitor Registration"
+                href="/admin/registration-monitoring"
+                active={isMonitorRegistrationActive}
+                onClick={onClose}
+              />
+            </div>
+
+            {/* Communication */}
+            <p className="mb-2 mt-6 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+              Communication
+            </p>
+
+            <div className="space-y-1">
+              <SidebarItem
+                icon={Mail}
+                label="Messages"
+                href="/admin/messages"
+                active={isActive(
+                  "/admin/messages"
+                )}
+                badge={
+                  unreadMessages > 0
+                    ? String(unreadMessages)
+                    : undefined
+                }
+                onClick={onClose}
+              />
+            </div>
+
+            {/* System */}
+            <p className="mb-2 mt-6 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+              System
+            </p>
+
+            <div className="space-y-1">
+              <SidebarItem
+                icon={Settings}
+                label="Settings"
+                href="/admin/settings"
+                active={isActive(
+                  "/admin/settings"
+                )}
+                onClick={onClose}
+              />
+            </div>
+
+            {/* Mobile Admin Profile */}
+            <div className="mt-4 border-t border-slate-900/[0.07] pt-3">
+              <div className="flex items-center gap-3 rounded-2xl border border-white/70 bg-white/60 p-3 shadow-sm backdrop-blur-xl">
+                {loadingAdmin ? (
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100">
+                    <Loader2
+                      size={15}
+                      className="animate-spin text-slate-400"
+                    />
+                  </div>
+                ) : admin?.avatar_url ? (
+                  <img
+                    src={admin.avatar_url}
+                    alt={displayName}
+                    className="h-9 w-9 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#527dff] to-[#21c997] text-xs font-bold text-white">
+                    {avatarLetter}
+                  </div>
+                )}
+
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-slate-900">
+                    {loadingAdmin
+                      ? "Loading..."
+                      : displayName}
+                  </p>
+
+                  <p className="truncate text-[11px] text-slate-500">
+                    {displayEmail}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  title="Logout"
+                  aria-label="Logout"
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="
+                    flex
+                    h-9
+                    w-9
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-xl
+                    p-2
+                    text-slate-400
+                    transition
+                    hover:bg-white
+                    hover:text-slate-900
+                    disabled:cursor-not-allowed
+                    disabled:opacity-60
+                  "
+                >
+                  {loggingOut ? (
+                    <Loader2
+                      size={17}
+                      className="animate-spin"
+                    />
+                  ) : (
+                    <LogOut size={17} />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* =====================================================
+          MOBILE BACKDROP
+          ===================================================== */}
+
       {open && (
         <button
           type="button"
-          aria-label="Close sidebar"
+          aria-label="Close navigation"
           onClick={onClose}
-          className="fixed inset-0 z-40 bg-slate-950/35 backdrop-blur-sm lg:hidden"
+          className="
+            fixed
+            inset-0
+            z-40
+            bg-slate-950/20
+            backdrop-blur-[2px]
+            lg:hidden
+          "
         />
       )}
 
+      {/* =====================================================
+          DESKTOP SIDEBAR
+          ===================================================== */}
+
       <aside
-        className={`fixed inset-y-3 left-3 z-50 flex w-[258px] flex-col overflow-hidden rounded-[26px] border border-white/70 bg-white/75 shadow-[0_20px_60px_rgba(15,23,42,0.10)] backdrop-blur-2xl transition-transform duration-300 lg:translate-x-0 ${
-          open
-            ? "translate-x-0"
-            : "-translate-x-[290px]"
-        }`}
+        className="
+          fixed
+          inset-y-3
+          left-3
+          z-50
+          hidden
+          w-[258px]
+          flex-col
+          overflow-hidden
+          rounded-[26px]
+          border
+          border-white/70
+          bg-white/75
+          shadow-[0_20px_60px_rgba(15,23,42,0.10)]
+          backdrop-blur-2xl
+          lg:flex
+        "
       >
         {/* Logo */}
         <div className="flex h-[82px] items-center justify-between border-b border-slate-900/[0.07] px-5">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-[15px] bg-white shadow-[0_10px_25px_rgba(79,124,255,0.12)]">
-  <img
-    src="/images/logo.png"
-    alt="Technical Council"
-    className="h-full w-full object-contain"
-  />
-</div>
+              <img
+                src="/images/logo.png"
+                alt="Technical Council"
+                className="h-full w-full object-contain"
+              />
+            </div>
 
             <div>
               <p className="text-sm font-extrabold tracking-tight text-slate-950">
@@ -333,14 +814,6 @@ export default function AdminSidebar({
               </p>
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 lg:hidden"
-          >
-            <X size={19} />
-          </button>
         </div>
 
         {/* Navigation */}
@@ -360,18 +833,22 @@ export default function AdminSidebar({
             />
 
             <SidebarItem
-               icon={UserPlus}
-               label="Applications"
-               href="/admin/applications"
-               active={isActive("/admin/applications")}
-               onClick={onClose}
+              icon={UserPlus}
+              label="Applications"
+              href="/admin/applications"
+              active={isActive(
+                "/admin/applications"
+              )}
+              onClick={onClose}
             />
 
             <SidebarItem
               icon={Bell}
               label="Notices"
               href="/admin/notices"
-              active={isActive("/admin/notices")}
+              active={isActive(
+                "/admin/notices"
+              )}
               onClick={onClose}
             />
 
@@ -379,7 +856,9 @@ export default function AdminSidebar({
               icon={CalendarDays}
               label="Events"
               href="/admin/events"
-              active={isActive("/admin/events")}
+              active={isActive(
+                "/admin/events"
+              )}
               onClick={onClose}
             />
 
@@ -387,7 +866,9 @@ export default function AdminSidebar({
               icon={Users}
               label="Team"
               href="/admin/team"
-              active={isActive("/admin/team")}
+              active={isActive(
+                "/admin/team"
+              )}
               onClick={onClose}
             />
 
@@ -395,7 +876,9 @@ export default function AdminSidebar({
               icon={ImageIcon}
               label="Gallery"
               href="/admin/gallery"
-              active={isActive("/admin/gallery")}
+              active={isActive(
+                "/admin/gallery"
+              )}
               onClick={onClose}
             />
           </div>
@@ -433,7 +916,9 @@ export default function AdminSidebar({
               icon={Mail}
               label="Messages"
               href="/admin/messages"
-              active={isActive("/admin/messages")}
+              active={isActive(
+                "/admin/messages"
+              )}
               badge={
                 unreadMessages > 0
                   ? String(unreadMessages)
@@ -453,7 +938,9 @@ export default function AdminSidebar({
               icon={Settings}
               label="Settings"
               href="/admin/settings"
-              active={isActive("/admin/settings")}
+              active={isActive(
+                "/admin/settings"
+              )}
               onClick={onClose}
             />
           </div>
@@ -499,7 +986,22 @@ export default function AdminSidebar({
               aria-label="Logout"
               onClick={handleLogout}
               disabled={loggingOut}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl p-2 text-slate-400 transition hover:bg-white hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+              className="
+                flex
+                h-9
+                w-9
+                shrink-0
+                items-center
+                justify-center
+                rounded-xl
+                p-2
+                text-slate-400
+                transition
+                hover:bg-white
+                hover:text-slate-900
+                disabled:cursor-not-allowed
+                disabled:opacity-60
+              "
             >
               {loggingOut ? (
                 <Loader2
@@ -516,6 +1018,10 @@ export default function AdminSidebar({
     </>
   );
 }
+
+/* ============================================================
+   SIDEBAR ITEM
+   ============================================================ */
 
 function SidebarItem({
   icon: Icon,
@@ -534,18 +1040,40 @@ function SidebarItem({
         router.push(href);
         onClick?.();
       }}
-      className={`group flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-sm font-bold transition duration-200 ${
-        active
-          ? "bg-gradient-to-r from-[#527dff] to-[#21c997] text-white shadow-[0_10px_24px_rgba(79,124,255,0.18)]"
-          : "text-slate-600 hover:translate-x-0.5 hover:bg-blue-500/[0.05] hover:text-slate-950"
-      }`}
+      className={`
+        group
+        flex
+        w-full
+        items-center
+        gap-3
+        rounded-[14px]
+        px-3
+        py-2.5
+        text-sm
+        font-bold
+        transition
+        duration-200
+        ${
+          active
+            ? "bg-gradient-to-r from-[#527dff] to-[#21c997] text-white shadow-[0_10px_24px_rgba(79,124,255,0.18)]"
+            : "text-slate-600 hover:translate-x-0.5 hover:bg-blue-500/[0.05] hover:text-slate-950"
+        }
+      `}
     >
       <span
-        className={`flex h-8 w-8 items-center justify-center rounded-[10px] ${
-          active
-            ? "bg-white/15"
-            : "bg-slate-100/70 group-hover:bg-white"
-        }`}
+        className={`
+          flex
+          h-8
+          w-8
+          items-center
+          justify-center
+          rounded-[10px]
+          ${
+            active
+              ? "bg-white/15"
+              : "bg-slate-100/70 group-hover:bg-white"
+          }
+        `}
       >
         <Icon
           size={17}
@@ -563,11 +1091,20 @@ function SidebarItem({
 
       {badge && (
         <span
-          className={`min-w-[22px] rounded-full px-2 py-0.5 text-center text-[10px] font-bold ${
-            active
-              ? "bg-white/15 text-white"
-              : "bg-rose-50 text-rose-600"
-          }`}
+          className={`
+            min-w-[22px]
+            rounded-full
+            px-2
+            py-0.5
+            text-center
+            text-[10px]
+            font-bold
+            ${
+              active
+                ? "bg-white/15 text-white"
+                : "bg-rose-50 text-rose-600"
+            }
+          `}
         >
           {badge}
         </span>

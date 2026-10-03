@@ -622,8 +622,8 @@ export default function SettingsPage() {
             Administration
           </p>
 
-          <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">
-            Settings
+          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
+          Settings
           </h1>
 
           <p className="mt-1 text-sm text-slate-500">

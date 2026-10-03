@@ -438,19 +438,10 @@ export default function NoticesPage() {
 
           <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <Link
-                href="/admin"
-                className="mb-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-950"
-              >
-                <ArrowLeft size={16} />
-                Back to Dashboard
-              </Link>
-
-              <p className="mb-1 text-sm font-medium text-slate-500">
-                Admin Portal
-              </p>
-
-              <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">
+              Latest Updates
+            </p>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-950">
                 Notices
               </h1>
 

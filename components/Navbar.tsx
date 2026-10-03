@@ -31,6 +31,7 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [navbarVisible, setNavbarVisible] = useState(true);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
@@ -43,6 +44,62 @@ export function Navbar() {
       setDarkMode(false);
     }
   }, []);
+
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    let ticking = false;
+
+    const handleScroll = () => {
+      if (ticking) return;
+
+      ticking = true;
+
+      window.requestAnimationFrame(() => {
+        const currentScrollY = window.scrollY;
+        const difference = currentScrollY - lastScrollY;
+
+        // Always show the navbar at the very top.
+        if (currentScrollY <= 10) {
+          setNavbarVisible(true);
+          lastScrollY = currentScrollY;
+          ticking = false;
+          return;
+        }
+
+        // Ignore extremely small movements.
+        if (Math.abs(difference) >= 8) {
+          if (difference > 0) {
+            // Scrolling DOWN → hide.
+            setNavbarVisible(false);
+
+            // Close the mobile menu if the user starts scrolling down.
+            setOpen(false);
+          } else {
+            // Scrolling UP → show.
+            setNavbarVisible(true);
+          }
+
+          lastScrollY = currentScrollY;
+        }
+
+        ticking = false;
+      });
+    };
+
+    window.addEventListener("scroll", handleScroll, {
+      passive: true,
+    });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Every new page starts with the navbar visible.
+    setNavbarVisible(true);
+    setOpen(false);
+  }, [pathname]);
 
   const toggleDarkMode = () => {
     const html = document.documentElement;
@@ -68,7 +125,35 @@ export function Navbar() {
 
   return (
     <>
-      <header className="sticky top-3 z-50 px-3">
+      {/* 
+        Spacer:
+        Keeps the original navbar space in the document flow
+        while the actual navbar is fixed to the viewport.
+      */}
+      <div
+        aria-hidden="true"
+        className="h-[66px] px-3 md:h-[74px]"
+      />
+
+      {/* Actual floating navbar */}
+      <header
+        className={`
+          fixed
+          left-0
+          right-0
+          top-3
+          z-50
+          px-3
+          transition-transform
+          duration-300
+          ease-out
+          ${
+            navbarVisible
+              ? "translate-y-0"
+              : "-translate-y-[calc(100%+1rem)]"
+          }
+        `}
+      >
         <nav
           className="
             nav-glass

@@ -302,10 +302,9 @@ export default function RegistrationMonitoringPage() {
 
         <div className="mb-8 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600text-sm font-semibold text-blue-600">
               Registration Management
             </p>
-
             <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
               Registration Monitoring
             </h1>

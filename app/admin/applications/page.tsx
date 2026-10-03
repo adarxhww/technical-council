@@ -657,7 +657,7 @@ export default function ApplicationsPage() {
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
           <div>
-            <p className="text-sm font-semibold text-blue-600">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">
               Recruitment
             </p>
 

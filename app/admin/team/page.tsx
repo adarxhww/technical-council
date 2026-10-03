@@ -707,23 +707,12 @@ export default function AdminTeamPage() {
       <div className="mx-auto w-full max-w-[1500px]">
         {/* HEADER */}
         <div className="mb-8">
-          <div className="mb-4">
-            <Link
-              href="/admin"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-slate-900"
-            >
-              <ArrowLeft size={17} />
-              Back to Dashboard
-            </Link>
-          </div>
-
+          
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-emerald-700">
-                <Users size={14} />
-                Team Management
-              </div>
-
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">
+              Our People
+            </p>
               <h1 className="text-3xl font-bold tracking-tight text-slate-950">
                 Team
               </h1>
