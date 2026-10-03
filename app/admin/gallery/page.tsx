@@ -2288,7 +2288,7 @@ export default function GalleryPage() {
                       addCategory();
                     }
                   }}
-                  placeholder="e.g. Tech Fusion 2026"
+                  placeholder="e.g. Celebrations"
                   className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-500/[0.08]"
                 />
 
