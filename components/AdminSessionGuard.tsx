@@ -7,7 +7,11 @@ const WARNING_MS = 60 * 1000;
 const MAX_SESSION_MS = 12 * 60 * 60 * 1000;
 const ACTIVITY_SYNC_MS = 30 * 1000;
 
-const SESSION_STARTED_KEY = "tc_admin_session_started_at";
+const SESSION_STARTED_KEY =
+  "tc_admin_session_started_at";
+
+const TAB_ID_KEY =
+  "tc_admin_tab_id";
 
 const SESSION_RETRY_COUNT = 8;
 const SESSION_RETRY_DELAY_MS = 500;
@@ -18,30 +22,41 @@ export default function AdminSessionGuard() {
 
   const lastActivityRef = useRef(Date.now());
   const sessionStartedRef = useRef<number | null>(null);
+  const tabIdRef = useRef<string | null>(null);
   const lastSyncRef = useRef(0);
   const loggingOutRef = useRef(false);
   const initializedRef = useRef(false);
-
-  /*
-   * =========================================================
-   * SESSION / ACTIVITY MANAGEMENT
-   * =========================================================
-   */
 
   useEffect(() => {
     let mounted = true;
 
     /*
-     * Restore the original session start time.
+     * Every browser tab gets its own ID.
      *
-     * sessionStorage survives:
-     * - page refresh
-     * - navigation between /admin pages
-     * - normal tab switching
+     * sessionStorage survives refresh/navigation
+     * in the same tab but disappears when the tab
+     * is closed.
      */
-    const storedStartedAt = sessionStorage.getItem(
-      SESSION_STARTED_KEY
-    );
+    let tabId =
+      sessionStorage.getItem(TAB_ID_KEY);
+
+    if (!tabId) {
+      /*
+       * A new tab must NOT create an authenticated
+       * admin session by itself.
+       *
+       * The login page creates the tab ID when
+       * authentication succeeds.
+       */
+      tabId = null;
+    }
+
+    tabIdRef.current = tabId;
+
+    const storedStartedAt =
+      sessionStorage.getItem(
+        SESSION_STARTED_KEY
+      );
 
     const parsedStartedAt = storedStartedAt
       ? Number(storedStartedAt)
@@ -51,19 +66,69 @@ export default function AdminSessionGuard() {
       Number.isFinite(parsedStartedAt) &&
       parsedStartedAt > 0
     ) {
-      sessionStartedRef.current = parsedStartedAt;
+      sessionStartedRef.current =
+        parsedStartedAt;
     }
 
     lastActivityRef.current = Date.now();
 
-    /*
-     * Synchronize browser activity with the
-     * server-side admin session.
-     */
+    async function logout(
+      reason:
+        | "inactivity"
+        | "max-lifetime"
+        | "tab-session-expired"
+        | "session-invalid"
+    ) {
+      if (loggingOutRef.current) return;
+
+      loggingOutRef.current = true;
+
+      try {
+        await fetch(
+          "/api/auth/logout",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              reason,
+              tabId:
+                tabIdRef.current,
+            }),
+            keepalive: true,
+          }
+        );
+      } catch {
+        // Leave the protected admin area anyway.
+      } finally {
+        sessionStorage.removeItem(
+          SESSION_STARTED_KEY
+        );
+
+        sessionStorage.removeItem(
+          TAB_ID_KEY
+        );
+
+        window.location.replace(
+          "/login?reason=session-expired"
+        );
+      }
+    }
+
     async function syncSessionActivity(
       force = false
     ) {
-      if (!mounted) {
+      if (!mounted) return false;
+
+      /*
+       * If there is no tab ID, this page was opened
+       * in a new browser tab instead of through login.
+       */
+      if (!tabIdRef.current) {
+        void logout("session-invalid");
         return false;
       }
 
@@ -80,42 +145,53 @@ export default function AdminSessionGuard() {
       lastSyncRef.current = now;
 
       try {
-        const response = await fetch(
-          "/api/auth/admin-session",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            credentials: "include",
-            body: JSON.stringify({
-              startedAt:
-                sessionStartedRef.current ??
-                undefined,
-              lastActivityAt: now,
-            }),
-          }
-        );
+        const response =
+          await fetch(
+            "/api/auth/admin-session",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+              credentials: "include",
+              body: JSON.stringify({
+                tabId:
+                  tabIdRef.current,
+                startedAt:
+                  sessionStartedRef.current ??
+                  undefined,
+                lastActivityAt: now,
+              }),
+            }
+          );
+
+        /*
+         * 401 means the tab session no longer
+         * exists or has expired.
+         */
+        if (response.status === 401) {
+          void logout(
+            "tab-session-expired"
+          );
+          return false;
+        }
 
         if (!response.ok) {
           return false;
         }
 
-        const result = await response
-          .json()
-          .catch(() => null);
+        const result =
+          await response
+            .json()
+            .catch(() => null);
 
-        /*
-         * If the server supplied the original
-         * session start time, preserve it locally.
-         */
         if (
           result?.startedAt &&
           !sessionStartedRef.current
         ) {
-          const startedAt = Number(
-            result.startedAt
-          );
+          const startedAt =
+            Number(result.startedAt);
 
           if (
             Number.isFinite(startedAt) &&
@@ -134,17 +210,13 @@ export default function AdminSessionGuard() {
         return true;
       } catch {
         /*
-         * Network/session restoration failures
-         * do not log the administrator out.
+         * Temporary network failures should not
+         * immediately log the admin out.
          */
         return false;
       }
     }
 
-    /*
-     * Give Supabase/browser authentication time
-     * to restore the session after login or refresh.
-     */
     async function initializeAdminSession() {
       if (
         !mounted ||
@@ -153,20 +225,36 @@ export default function AdminSessionGuard() {
         return;
       }
 
+      /*
+       * A missing tab ID means this tab was not
+       * created through the login flow.
+       */
+      if (!tabIdRef.current) {
+        initializedRef.current = true;
+
+        void logout(
+          "session-invalid"
+        );
+
+        return;
+      }
+
       for (
         let attempt = 0;
         attempt < SESSION_RETRY_COUNT;
         attempt += 1
       ) {
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
 
         const synced =
-          await syncSessionActivity(true);
+          await syncSessionActivity(
+            true
+          );
 
         if (synced) {
-          initializedRef.current = true;
+          initializedRef.current =
+            true;
+
           return;
         }
 
@@ -185,21 +273,16 @@ export default function AdminSessionGuard() {
         }
       }
 
-      /*
-       * Do not force logout here.
-       * Middleware/server authentication remains
-       * authoritative for /admin.
-       */
-      initializedRef.current = true;
+      initializedRef.current =
+        true;
     }
 
     void initializeAdminSession();
 
-    /*
-     * Record genuine user activity.
-     */
     function recordActivity() {
-      lastActivityRef.current = Date.now();
+      lastActivityRef.current =
+        Date.now();
+
       setWarning(false);
 
       void syncSessionActivity();
@@ -212,136 +295,90 @@ export default function AdminSessionGuard() {
       "scroll",
     ] as const;
 
-    activityEvents.forEach((event) => {
-      window.addEventListener(
-        event,
-        recordActivity,
-        {
-          passive: true,
-        }
-      );
-    });
-
-    /*
-     * Automatic logout for:
-     *
-     * 1. 10 minutes of inactivity
-     * 2. 12-hour maximum session lifetime
-     */
-    async function logout(
-      reason:
-        | "inactivity"
-        | "max-lifetime"
-    ) {
-      if (loggingOutRef.current) {
-        return;
-      }
-
-      loggingOutRef.current = true;
-
-      try {
-        await fetch(
-          "/api/auth/logout",
+    activityEvents.forEach(
+      (event) => {
+        window.addEventListener(
+          event,
+          recordActivity,
           {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            credentials: "include",
-            body: JSON.stringify({
-              reason,
-            }),
-            keepalive: true,
+            passive: true,
           }
         );
-      } catch {
+      }
+    );
+
+    const interval =
+      window.setInterval(() => {
+        if (!mounted) return;
+
+        const now = Date.now();
+
+        const inactiveFor =
+          now -
+          lastActivityRef.current;
+
+        const sessionStarted =
+          sessionStartedRef.current;
+
+        const sessionAge =
+          sessionStarted
+            ? now - sessionStarted
+            : 0;
+
+        if (
+          sessionStarted &&
+          sessionAge >=
+            MAX_SESSION_MS
+        ) {
+          void logout(
+            "max-lifetime"
+          );
+
+          return;
+        }
+
+        if (
+          inactiveFor >=
+          INACTIVITY_MS
+        ) {
+          void logout(
+            "inactivity"
+          );
+
+          return;
+        }
+
         /*
-         * Even if the logout request fails,
-         * leave the protected admin area.
+         * Heartbeat.
+         *
+         * This runs independently of user
+         * activity so that an open tab continues
+         * proving that it is alive.
          */
-      } finally {
-        sessionStorage.removeItem(
-          SESSION_STARTED_KEY
-        );
+        void syncSessionActivity();
 
-        window.location.replace(
-          "/login?reason=session-expired"
-        );
-      }
-    }
+        const remaining =
+          INACTIVITY_MS -
+          inactiveFor;
 
-    /*
-     * Check inactivity and maximum session
-     * lifetime every second.
-     */
-    const interval = window.setInterval(() => {
-      if (!mounted) {
-        return;
-      }
+        if (
+          remaining <= WARNING_MS
+        ) {
+          setWarning(true);
 
-      const now = Date.now();
-
-      const inactiveFor =
-        now - lastActivityRef.current;
-
-      const sessionStarted =
-        sessionStartedRef.current;
-
-      const sessionAge = sessionStarted
-        ? now - sessionStarted
-        : 0;
-
-      /*
-       * Maximum session lifetime.
-       */
-      if (
-        sessionStarted &&
-        sessionAge >= MAX_SESSION_MS
-      ) {
-        void logout("max-lifetime");
-        return;
-      }
-
-      /*
-       * Automatic logout after 10 minutes
-       * without activity.
-       */
-      if (
-        inactiveFor >= INACTIVITY_MS
-      ) {
-        void logout("inactivity");
-        return;
-      }
-
-      /*
-       * Show warning during final 60 seconds.
-       */
-      const remaining =
-        INACTIVITY_MS - inactiveFor;
-
-      if (remaining <= WARNING_MS) {
-        setWarning(true);
-
-        setSecondsLeft(
-          Math.max(
-            1,
-            Math.ceil(
-              remaining / 1000
+          setSecondsLeft(
+            Math.max(
+              1,
+              Math.ceil(
+                remaining / 1000
+              )
             )
-          )
-        );
-      } else {
-        setWarning(false);
-      }
-    }, 1000);
+          );
+        } else {
+          setWarning(false);
+        }
+      }, 1000);
 
-    /*
-     * When the administrator returns to the tab:
-     *
-     * - Switching tabs does NOT automatically log out.
-     * - If inactivity was actually exceeded, logout occurs.
-     * - Otherwise returning to the tab counts as activity.
-     */
     function handleVisibilityChange() {
       if (
         document.visibilityState !==
@@ -353,33 +390,40 @@ export default function AdminSessionGuard() {
       const now = Date.now();
 
       const inactiveFor =
-        now - lastActivityRef.current;
+        now -
+        lastActivityRef.current;
 
       const sessionStarted =
         sessionStartedRef.current;
 
-      const sessionAge = sessionStarted
-        ? now - sessionStarted
-        : 0;
+      const sessionAge =
+        sessionStarted
+          ? now - sessionStarted
+          : 0;
 
       if (
         sessionStarted &&
-        sessionAge >= MAX_SESSION_MS
+        sessionAge >=
+          MAX_SESSION_MS
       ) {
-        void logout("max-lifetime");
+        void logout(
+          "max-lifetime"
+        );
+
         return;
       }
 
       if (
-        inactiveFor >= INACTIVITY_MS
+        inactiveFor >=
+        INACTIVITY_MS
       ) {
-        void logout("inactivity");
+        void logout(
+          "inactivity"
+        );
+
         return;
       }
 
-      /*
-       * Returning to the tab counts as activity.
-       */
       recordActivity();
     }
 
@@ -391,14 +435,18 @@ export default function AdminSessionGuard() {
     return () => {
       mounted = false;
 
-      window.clearInterval(interval);
+      window.clearInterval(
+        interval
+      );
 
-      activityEvents.forEach((event) => {
-        window.removeEventListener(
-          event,
-          recordActivity
-        );
-      });
+      activityEvents.forEach(
+        (event) => {
+          window.removeEventListener(
+            event,
+            recordActivity
+          );
+        }
+      );
 
       document.removeEventListener(
         "visibilitychange",
@@ -408,40 +456,27 @@ export default function AdminSessionGuard() {
   }, []);
 
   /*
-   * =========================================================
-   * PUBLIC NAVIGATION DETECTOR
-   * =========================================================
-   *
-   * IMPORTANT:
-   *
-   * This listener must NOT treat downloads or
-   * "open in new tab" actions as leaving /admin.
+   * When an admin intentionally leaves the
+   * admin area, sign out before navigating.
    */
-
   useEffect(() => {
     async function handlePublicNavigation(
       event: MouseEvent
     ) {
       const target =
-        event.target as HTMLElement | null;
+        event.target as
+          | HTMLElement
+          | null;
 
       const anchor =
-        target?.closest("a[href]") as
+        target?.closest(
+          "a[href]"
+        ) as
           | HTMLAnchorElement
           | null;
 
-      if (!anchor) {
-        return;
-      }
+      if (!anchor) return;
 
-      /*
-       * Ignore modified clicks:
-       *
-       * Ctrl/Cmd-click
-       * middle-click
-       * Shift-click
-       * Alt-click
-       */
       if (
         event.ctrlKey ||
         event.metaKey ||
@@ -452,65 +487,34 @@ export default function AdminSessionGuard() {
         return;
       }
 
-      /*
-       * =====================================================
-       * FIX #1 — CSV / FILE DOWNLOAD
-       * =====================================================
-       *
-       * The CSV exporter creates a temporary anchor:
-       *
-       *   <a download href="blob:...">
-       *
-       * Its click bubbles to document.
-       *
-       * Without this check, the guard thinks the admin
-       * is navigating away and calls /api/auth/logout.
-       */
       if (
-        anchor.hasAttribute("download") ||
-        anchor.href.startsWith("blob:")
+        anchor.hasAttribute(
+          "download"
+        ) ||
+        anchor.href.startsWith(
+          "blob:"
+        )
       ) {
         return;
       }
 
-      /*
-       * =====================================================
-       * FIX #2 — RESUME / NEW TAB
-       * =====================================================
-       *
-       * Resume viewing can use:
-       *
-       *   target="_blank"
-       *
-       * or:
-       *
-       *   rel="noopener noreferrer"
-       *
-       * These actions are NOT an admin navigation.
-       *
-       * Never log out because of them.
-       */
       if (
         anchor.target === "_blank" ||
-        anchor.rel.includes("noopener") ||
-        anchor.rel.includes("noreferrer")
+        anchor.rel.includes(
+          "noopener"
+        ) ||
+        anchor.rel.includes(
+          "noreferrer"
+        )
       ) {
         return;
       }
 
-      /*
-       * Build the destination URL.
-       */
       const url = new URL(
         anchor.href,
         window.location.origin
       );
 
-      /*
-       * Only handle same-origin navigation.
-       *
-       * External links are left to the browser.
-       */
       if (
         url.origin !==
         window.location.origin
@@ -518,28 +522,17 @@ export default function AdminSessionGuard() {
         return;
       }
 
-      /*
-       * =====================================================
-       * ADMIN NAVIGATION
-       * =====================================================
-       *
-       * Anything inside /admin remains authenticated.
-       */
       const staysInsideAdmin =
-        url.pathname === "/admin" ||
-        url.pathname.startsWith("/admin/");
+        url.pathname ===
+          "/admin" ||
+        url.pathname.startsWith(
+          "/admin/"
+        );
 
       if (staysInsideAdmin) {
         return;
       }
 
-      /*
-       * =====================================================
-       * GENUINELY LEAVING ADMIN
-       * =====================================================
-       *
-       * Only now do we terminate the admin session.
-       */
       event.preventDefault();
 
       try {
@@ -547,17 +540,29 @@ export default function AdminSessionGuard() {
           "/api/auth/logout",
           {
             method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
             credentials: "include",
+            body: JSON.stringify({
+              tabId:
+                sessionStorage.getItem(
+                  TAB_ID_KEY
+                ),
+            }),
             keepalive: true,
           }
         );
       } catch {
-        /*
-         * Navigate anyway.
-         */
+        // Navigate anyway.
       } finally {
         sessionStorage.removeItem(
           SESSION_STARTED_KEY
+        );
+
+        sessionStorage.removeItem(
+          TAB_ID_KEY
         );
 
         window.location.assign(
@@ -579,12 +584,6 @@ export default function AdminSessionGuard() {
     };
   }, []);
 
-  /*
-   * =========================================================
-   * WARNING UI
-   * =========================================================
-   */
-
   if (!warning) {
     return null;
   }
@@ -603,8 +602,8 @@ export default function AdminSessionGuard() {
             </p>
 
             <p className="mt-1 text-sm text-slate-500">
-              You will be logged out
-              automatically after{" "}
+              You will be logged out automatically
+              after{" "}
               {secondsLeft} seconds of
               inactivity.
             </p>

@@ -840,7 +840,7 @@ export default function NoticesPage() {
                         event.target.value
                       )
                     }
-                    placeholder="e.g. Tech Fusion !!"
+                    placeholder="Notice Title !!"
                     autoFocus
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-500/[0.08]"
                   />
@@ -864,7 +864,7 @@ export default function NoticesPage() {
                         event.target.value
                       )
                     }
-                    placeholder="e.g. AUG 2026"
+                    placeholder="OCT 2026"
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-500/[0.08]"
                   />
                 </div>
@@ -994,7 +994,7 @@ export default function NoticesPage() {
                               event.target.value
                             )
                           }
-                          placeholder="https://www.youtube.com/"
+                          placeholder="Attach the link"
                           className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/[0.08]"
                         />
 

@@ -29,7 +29,8 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] =
+    useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -92,6 +93,21 @@ export default function LoginPage() {
 
     /*
      * STEP 2
+     * Create a unique ID for this browser tab.
+     *
+     * sessionStorage is specific to this tab.
+     * It survives refreshes and navigation within
+     * this tab, but disappears when the tab is closed.
+     */
+    const tabId = crypto.randomUUID();
+
+    sessionStorage.setItem(
+      "tc_admin_tab_id",
+      tabId
+    );
+
+    /*
+     * STEP 3
      * Start the secure admin session.
      */
     const now = Date.now();
@@ -105,8 +121,10 @@ export default function LoginPage() {
         },
         credentials: "include",
         body: JSON.stringify({
+          tabId,
           startedAt: now,
           lastActivityAt: now,
+          initialize: true,
         }),
       }
     );
@@ -117,6 +135,10 @@ export default function LoginPage() {
      */
     if (!sessionResponse.ok) {
       await supabase.auth.signOut();
+
+      sessionStorage.removeItem(
+        "tc_admin_tab_id"
+      );
 
       setLoading(false);
 
@@ -304,7 +326,6 @@ export default function LoginPage() {
                     size={12}
                     className="text-emerald-500"
                   />
-
                   Secure administrator access
                 </div>
 

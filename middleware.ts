@@ -1,16 +1,23 @@
 import { createServerClient } from "@supabase/ssr";
-import { NextResponse, type NextRequest } from "next/server";
+import {
+  NextResponse,
+  type NextRequest,
+} from "next/server";
 
-const ADMIN_SESSION_COOKIE = "tc_admin_session";
+const ADMIN_SESSION_COOKIE =
+  "tc_admin_session";
 
-export async function middleware(request: NextRequest) {
+export async function middleware(
+  request: NextRequest
+) {
   const pathname = request.nextUrl.pathname;
 
   const isAdminRoute =
     pathname === "/admin" ||
     pathname.startsWith("/admin/");
 
-  const isLoginRoute = pathname === "/login";
+  const isLoginRoute =
+    pathname === "/login";
 
   let response = NextResponse.next({
     request: {
@@ -28,9 +35,14 @@ export async function middleware(request: NextRequest) {
         },
 
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => {
-            request.cookies.set(name, value);
-          });
+          cookiesToSet.forEach(
+            ({ name, value }) => {
+              request.cookies.set(
+                name,
+                value
+              );
+            }
+          );
 
           response = NextResponse.next({
             request: {
@@ -39,7 +51,11 @@ export async function middleware(request: NextRequest) {
           });
 
           cookiesToSet.forEach(
-            ({ name, value, options }) => {
+            ({
+              name,
+              value,
+              options,
+            }) => {
               response.cookies.set(
                 name,
                 value,
@@ -55,7 +71,8 @@ export async function middleware(request: NextRequest) {
   const {
     data,
     error,
-  } = await supabase.auth.getUser();
+  } =
+    await supabase.auth.getUser();
 
   const user = data?.user ?? null;
 
@@ -66,12 +83,29 @@ export async function middleware(request: NextRequest) {
    */
 
   if (isAdminRoute) {
+    /*
+     * No authenticated Supabase user.
+     */
     if (error || !user) {
-      return NextResponse.redirect(
-        new URL("/login", request.url)
+      const redirectResponse =
+        NextResponse.redirect(
+          new URL(
+            "/login",
+            request.url
+          )
+        );
+
+      redirectResponse.cookies.delete(
+        ADMIN_SESSION_COOKIE
       );
+
+      return redirectResponse;
     }
 
+    /*
+     * Verify that this user is an active
+     * administrator.
+     */
     const {
       data: adminProfile,
       error: adminProfileError,
@@ -90,7 +124,10 @@ export async function middleware(request: NextRequest) {
 
       const redirectResponse =
         NextResponse.redirect(
-          new URL("/login", request.url)
+          new URL(
+            "/login",
+            request.url
+          )
         );
 
       redirectResponse.cookies.delete(
@@ -101,7 +138,14 @@ export async function middleware(request: NextRequest) {
     }
 
     /*
-     * Keep the admin marker.
+     * Keep the existing admin marker.
+     *
+     * The actual tab-specific session is
+     * validated by AdminSessionGuard.
+     *
+     * We intentionally do not try to identify
+     * the browser tab here because sessionStorage
+     * is not available to middleware.
      */
     if (
       !request.cookies.get(
@@ -115,7 +159,8 @@ export async function middleware(request: NextRequest) {
           httpOnly: true,
           sameSite: "lax",
           secure:
-            process.env.NODE_ENV === "production",
+            process.env.NODE_ENV ===
+            "production",
           path: "/",
         }
       );
@@ -130,7 +175,11 @@ export async function middleware(request: NextRequest) {
    * ==========================================================
    */
 
-  if (isLoginRoute && user && !error) {
+  if (
+    isLoginRoute &&
+    user &&
+    !error
+  ) {
     const {
       data: adminProfile,
       error: adminProfileError,
@@ -142,10 +191,14 @@ export async function middleware(request: NextRequest) {
 
     if (
       !adminProfileError &&
-      adminProfile?.status === "active"
+      adminProfile?.status ===
+        "active"
     ) {
       return NextResponse.redirect(
-        new URL("/admin", request.url)
+        new URL(
+          "/admin",
+          request.url
+        )
       );
     }
   }
@@ -157,17 +210,10 @@ export async function middleware(request: NextRequest) {
    *
    * IMPORTANT:
    *
-   * DO NOT sign the user out here.
+   * Do NOT sign the user out here.
    *
-   * An authenticated admin may legitimately access:
-   *
-   * - public pages
-   * - recruitment pages
-   * - uploaded/downloaded resources
-   * - other application routes
-   *
-   * Visiting those routes must not destroy
-   * the Supabase session.
+   * An authenticated admin may legitimately
+   * access public pages.
    */
 
   return response;

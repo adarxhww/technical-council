@@ -125,6 +125,11 @@ type NoticeOverview = {
     title: string;
     date: string;
   } | null;
+  recent: {
+    id: string;
+    title: string;
+    date: string;
+  }[];
 };
 
 type TeamOverview = {
@@ -269,6 +274,7 @@ export default function AdminDashboardPage() {
       published: 0,
       hidden: 0,
       latest: null,
+      recent: [],
     });
 
   const [teamOverview, setTeamOverview] =
@@ -303,11 +309,6 @@ export default function AdminDashboardPage() {
 
         let user = null;
 
-        /*
-         * Supabase can briefly report no session while the browser
-         * is restoring the authenticated session after login or a
-         * refresh.
-         */
         for (let attempt = 0; attempt < 12; attempt += 1) {
           const {
             data: { session },
@@ -331,11 +332,6 @@ export default function AdminDashboardPage() {
           );
         }
 
-        /*
-         * Do not crash, redirect, or display a false
-         * session-expired error when the browser has not
-         * restored the client session yet.
-         */
         if (!user) {
           setLoading(false);
           setRefreshing(false);
@@ -619,6 +615,40 @@ export default function AdminDashboardPage() {
               notice.published === false
           ).length;
 
+        /*
+         * ----------------------------------------------------
+         * MOST RECENT 3 PUBLISHED NOTICES
+         * ----------------------------------------------------
+         */
+
+        const recentPublishedNotices =
+          allNotices
+            .filter(
+              (notice) =>
+                notice.published === true
+            )
+            .sort(
+              (a, b) =>
+                new Date(
+                  b.updated_at ||
+                    b.created_at
+                ).getTime() -
+                new Date(
+                  a.updated_at ||
+                    a.created_at
+                ).getTime()
+            )
+            .slice(0, 3);
+
+        const latestNotice =
+          recentPublishedNotices[0];
+
+        /*
+         * ----------------------------------------------------
+         * Upcoming events
+         * ----------------------------------------------------
+         */
+
         const today = new Date();
 
         today.setHours(
@@ -651,9 +681,6 @@ export default function AdminDashboardPage() {
             return first - second;
           })
           .slice(0, 4);
-
-        const latestNotice =
-          allNotices[0];
 
         /*
          * ----------------------------------------------------
@@ -698,7 +725,7 @@ export default function AdminDashboardPage() {
 
         /*
          * ----------------------------------------------------
-         * EXISTING RECENT ACTIVITY
+         * Recent activity
          * ----------------------------------------------------
          */
 
@@ -748,7 +775,7 @@ export default function AdminDashboardPage() {
 
         /*
          * ----------------------------------------------------
-         * NOTIFICATION BELL
+         * Notifications
          * ----------------------------------------------------
          */
 
@@ -898,6 +925,15 @@ export default function AdminDashboardPage() {
                   latestNotice.date,
               }
             : null,
+
+          recent:
+            recentPublishedNotices.map(
+              (notice) => ({
+                id: notice.id,
+                title: notice.title,
+                date: notice.date,
+              })
+            ),
         });
 
         setTeamOverview({
@@ -952,16 +988,6 @@ export default function AdminDashboardPage() {
     let mounted = true;
     let initializationFinished = false;
 
-    /*
-     * Register the auth listener first so a session restored
-     * immediately after mount cannot be missed.
-     *
-     * IMPORTANT:
-     * AuthChangeEvent and Session are explicitly typed here.
-     * This fixes the TypeScript build error:
-     *
-     * Parameter 'event' implicitly has an 'any' type.
-     */
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
@@ -979,10 +1005,6 @@ export default function AdminDashboardPage() {
             event === "TOKEN_REFRESHED") &&
           session?.user
         ) {
-          /*
-           * Supabase recommends not starting another auth request
-           * synchronously inside the auth-state callback.
-           */
           window.setTimeout(() => {
             if (mounted) {
               void loadDashboard();
@@ -992,10 +1014,6 @@ export default function AdminDashboardPage() {
           return;
         }
 
-        /*
-         * Only an actual Supabase sign-out should send
-         * the user to the login page.
-         */
         if (event === "SIGNED_OUT") {
           window.location.replace(
             "/login"
@@ -1776,13 +1794,10 @@ export default function AdminDashboardPage() {
 
           {/* Notice Overview */}
           <div className="xl:col-span-4">
-
             <DashboardCard
               title="Notice board"
               subtitle="Keep everyone informed"
-              icon={
-                <Bell className="h-5 w-5" />
-              }
+              icon={<Bell className="h-5 w-5" />}
               action={
                 <Link
                   href="/admin/notices"
@@ -1791,15 +1806,13 @@ export default function AdminDashboardPage() {
                   Manage
                 </Link>
               }
+              className="flex h-full flex-col"
+              contentClassName="flex min-h-0 flex-1 flex-col"
             >
-
               <div className="grid grid-cols-2 gap-3">
-
                 <div className="rounded-2xl bg-emerald-50 p-4">
                   <p className="text-2xl font-bold text-emerald-700">
-                    {
-                      noticeOverview.published
-                    }
+                    {noticeOverview.published}
                   </p>
 
                   <p className="mt-1 text-xs font-semibold text-emerald-700/70">
@@ -1809,50 +1822,54 @@ export default function AdminDashboardPage() {
 
                 <div className="rounded-2xl bg-slate-100 p-4">
                   <p className="text-2xl font-bold text-slate-700">
-                    {
-                      noticeOverview.hidden
-                    }
+                    {noticeOverview.hidden}
                   </p>
 
                   <p className="mt-1 text-xs font-semibold text-slate-500">
                     Hidden
                   </p>
                 </div>
-
               </div>
 
-              <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              {/* Latest 3 published notices */}
+              <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                {noticeOverview.recent.length > 0 ? (
+                  <div className="flex min-h-0 flex-1 flex-col justify-between">
+                    {noticeOverview.recent
+                      .slice(0, 3)
+                      .map((notice) => (
+                        <Link
+                          key={notice.id}
+                          href="/admin/notices"
+                          className="group flex min-h-[46px] flex-1 items-center justify-between gap-3 rounded-xl px-3 py-2 transition hover:bg-white"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-bold text-slate-800 group-hover:text-indigo-600">
+                              {notice.title}
+                            </p>
 
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Latest update
-                </p>
+                            <p className="mt-1 truncate text-[10px] text-slate-400">
+                              Published notice
+                            </p>
+                          </div>
 
-                {noticeOverview.latest ? (
-                  <>
-                    <p className="mt-2 line-clamp-2 text-sm font-bold text-slate-900">
-                      {
-                        noticeOverview
-                          .latest.title
-                      }
-                    </p>
-
-                    <p className="mt-1 text-xs text-slate-400">
-                      {formatEventDate(
-                        noticeOverview
-                          .latest.date
-                      )}
-                    </p>
-                  </>
+                          <span className="shrink-0 text-[10px] font-medium text-slate-400">
+                            {formatEventDate(
+                              notice.date
+                            )}
+                          </span>
+                        </Link>
+                      ))}
+                  </div>
                 ) : (
-                  <p className="mt-2 text-sm text-slate-400">
-                    No notices created yet.
-                  </p>
+                  <div className="flex flex-1 items-center justify-center">
+                    <p className="text-sm text-slate-400">
+                      No published notices yet.
+                    </p>
+                  </div>
                 )}
-
               </div>
-
             </DashboardCard>
-
           </div>
 
           {/* Team Overview */}
@@ -2428,17 +2445,23 @@ function DashboardCard({
   icon,
   action,
   children,
+  className = "",
+  contentClassName = "",
 }: {
   title: string;
   subtitle: string;
   icon: React.ReactNode;
   action?: React.ReactNode;
   children: React.ReactNode;
+  className?: string;
+  contentClassName?: string;
 }) {
   return (
-    <section className="h-full rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+    <section
+      className={`h-full rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6 ${className}`}
+    >
 
-      <div className="mb-5 flex items-start justify-between gap-4">
+      <div className="mb-5 flex shrink-0 items-start justify-between gap-4">
 
         <div className="flex items-center gap-3">
 
@@ -2464,7 +2487,9 @@ function DashboardCard({
 
       </div>
 
-      {children}
+      <div className={contentClassName}>
+        {children}
+      </div>
 
     </section>
   );
