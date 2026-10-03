@@ -207,6 +207,8 @@ export function Navbar() {
             {/* Admin */}
             <Link
               href="/admin"
+              target="_blank"
+              rel="noopener noreferrer"
               className="
                 btn-primary
                 flex
