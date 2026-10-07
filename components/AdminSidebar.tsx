@@ -4,6 +4,7 @@ import {
   Bell,
   CalendarDays,
   ClipboardList,
+  FileOutput,
   FilePlus2,
   Image as ImageIcon,
   LayoutDashboard,
@@ -17,7 +18,11 @@ import {
   UserPlus,
 } from "lucide-react";
 
-import { usePathname, useRouter } from "next/navigation";
+import {
+  usePathname,
+  useRouter,
+} from "next/navigation";
+
 import { useEffect, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -75,7 +80,6 @@ export default function AdminSidebar({
    * GENERAL ACTIVE STATE
    * ==========================================================
    */
-
   const isActive = (href: string) => {
     if (href === "/admin") {
       return pathname === "/admin";
@@ -93,14 +97,28 @@ export default function AdminSidebar({
    * ==========================================================
    */
 
-  const isCreateRegistrationActive =
-    pathname === "/admin/registrations" ||
-    pathname === "/admin/registrations/create";
+  const isRegistrationActive =
+    pathname === "/admin/registrations";
 
   const isMonitorRegistrationActive =
     pathname === "/admin/registration-monitoring" ||
+    pathname.startsWith("/admin/registration-monitoring/") ||
     (pathname.startsWith("/admin/registrations/") &&
-      pathname !== "/admin/registrations/create");
+      pathname !== "/admin/registrations");
+
+  /*
+   * ==========================================================
+   * SUBMISSION ACTIVE STATES
+   * ==========================================================
+   */
+
+  const isSubmissionActive =
+    pathname === "/admin/submissions";
+
+  const isMonitorSubmissionActive =
+    pathname === "/admin/submissions-monitoring" ||
+    pathname.startsWith("/admin/submissions-monitoring/") ||
+    pathname.startsWith("/admin/submissions/");
 
   /*
    * ==========================================================
@@ -111,7 +129,6 @@ export default function AdminSidebar({
    * Scroll up   -> show
    * At top      -> always show
    */
-
   useEffect(() => {
     let lastScrollY = window.scrollY;
     let ticking = false;
@@ -185,7 +202,6 @@ export default function AdminSidebar({
    * Otherwise clicking the hamburger would:
    * open the menu -> effect runs -> menu closes immediately.
    */
-
   useEffect(() => {
     setNavbarVisible(true);
     onClose();
@@ -196,7 +212,6 @@ export default function AdminSidebar({
    * LOAD ADMIN PROFILE
    * ==========================================================
    */
-
   useEffect(() => {
     let mounted = true;
 
@@ -216,7 +231,10 @@ export default function AdminSidebar({
           return;
         }
 
-        const { data: profile, error } = await supabase
+        const {
+          data: profile,
+          error,
+        } = await supabase
           .from("admin_profiles")
           .select(
             "id, name, email, role, status, avatar_url"
@@ -268,13 +286,15 @@ export default function AdminSidebar({
    * LOAD UNREAD MESSAGE COUNT
    * ==========================================================
    */
-
   useEffect(() => {
     let mounted = true;
 
     async function loadUnreadMessageCount() {
       try {
-        const { count, error } = await supabase
+        const {
+          count,
+          error,
+        } = await supabase
           .from("contact_messages")
           .select("id", {
             count: "exact",
@@ -361,7 +381,6 @@ export default function AdminSidebar({
    * LOGOUT
    * ==========================================================
    */
-
   async function handleLogout() {
     if (loggingOut) {
       return;
@@ -412,7 +431,6 @@ export default function AdminSidebar({
    * DISPLAY DATA
    * ==========================================================
    */
-
   const displayName =
     admin?.name?.trim() || "Administrator";
 
@@ -463,6 +481,7 @@ export default function AdminSidebar({
           "
         >
           {/* Logo + Brand */}
+
           <div className="flex min-w-0 items-center gap-2.5">
             <div
               className="
@@ -497,6 +516,7 @@ export default function AdminSidebar({
           </div>
 
           {/* Hamburger */}
+
           <button
             type="button"
             onClick={() => {
@@ -528,7 +548,11 @@ export default function AdminSidebar({
               hover:bg-white
             "
           >
-            {open ? <X size={19} /> : <Menu size={19} />}
+            {open ? (
+              <X size={19} />
+            ) : (
+              <Menu size={19} />
+            )}
           </button>
         </div>
 
@@ -552,6 +576,7 @@ export default function AdminSidebar({
             "
           >
             {/* Workspace */}
+
             <p className="mb-2 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
               Workspace
             </p>
@@ -617,6 +642,7 @@ export default function AdminSidebar({
             </div>
 
             {/* Registration */}
+
             <p className="mb-2 mt-6 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
               Registration
             </p>
@@ -626,7 +652,7 @@ export default function AdminSidebar({
                 icon={FilePlus2}
                 label="Create Registration Page"
                 href="/admin/registrations"
-                active={isCreateRegistrationActive}
+                active={isRegistrationActive}
                 onClick={onClose}
               />
 
@@ -634,12 +660,39 @@ export default function AdminSidebar({
                 icon={ClipboardList}
                 label="Monitor Registration"
                 href="/admin/registration-monitoring"
-                active={isMonitorRegistrationActive}
+                active={
+                  isMonitorRegistrationActive
+                }
+                onClick={onClose}
+              />
+            </div>
+
+            {/* Submission */}
+
+            <p className="mb-2 mt-6 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+              Submission
+            </p>
+
+            <div className="space-y-1">
+              <SidebarItem
+                icon={FileOutput}
+                label="Create Submission Page"
+                href="/admin/submissions"
+                active={isSubmissionActive}
+                onClick={onClose}
+              />
+
+              <SidebarItem
+                icon={ClipboardList}
+                label="Monitor Submissions"
+                href="/admin/submissions-monitoring"
+                active={isMonitorSubmissionActive}
                 onClick={onClose}
               />
             </div>
 
             {/* Communication */}
+
             <p className="mb-2 mt-6 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
               Communication
             </p>
@@ -662,6 +715,7 @@ export default function AdminSidebar({
             </div>
 
             {/* System */}
+
             <p className="mb-2 mt-6 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
               System
             </p>
@@ -679,6 +733,7 @@ export default function AdminSidebar({
             </div>
 
             {/* Mobile Admin Profile */}
+
             <div className="mt-4 border-t border-slate-900/[0.07] pt-3">
               <div className="flex items-center gap-3 rounded-2xl border border-white/70 bg-white/60 p-3 shadow-sm backdrop-blur-xl">
                 {loadingAdmin ? (
@@ -794,6 +849,7 @@ export default function AdminSidebar({
         "
       >
         {/* Logo */}
+
         <div className="flex h-[82px] items-center justify-between border-b border-slate-900/[0.07] px-5">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-[15px] bg-white shadow-[0_10px_25px_rgba(79,124,255,0.12)]">
@@ -817,8 +873,10 @@ export default function AdminSidebar({
         </div>
 
         {/* Navigation */}
+
         <nav className="flex-1 overflow-y-auto px-3 py-5">
           {/* Workspace */}
+
           <p className="mb-2 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
             Workspace
           </p>
@@ -884,6 +942,7 @@ export default function AdminSidebar({
           </div>
 
           {/* Registration */}
+
           <p className="mb-2 mt-8 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
             Registration
           </p>
@@ -893,7 +952,7 @@ export default function AdminSidebar({
               icon={FilePlus2}
               label="Create Registration Page"
               href="/admin/registrations"
-              active={isCreateRegistrationActive}
+              active={isRegistrationActive}
               onClick={onClose}
             />
 
@@ -901,12 +960,39 @@ export default function AdminSidebar({
               icon={ClipboardList}
               label="Monitor Registration"
               href="/admin/registration-monitoring"
-              active={isMonitorRegistrationActive}
+              active={
+                isMonitorRegistrationActive
+              }
+              onClick={onClose}
+            />
+          </div>
+
+          {/* Submission */}
+
+          <p className="mb-2 mt-8 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
+            Submission
+          </p>
+
+          <div className="space-y-1">
+            <SidebarItem
+              icon={FileOutput}
+              label="Create Submission Page"
+              href="/admin/submissions"
+              active={isSubmissionActive}
+              onClick={onClose}
+            />
+
+            <SidebarItem
+              icon={ClipboardList}
+              label="Monitor Submissions"
+              href="/admin/submissions-monitoring"
+              active={isMonitorSubmissionActive}
               onClick={onClose}
             />
           </div>
 
           {/* Communication */}
+
           <p className="mb-2 mt-8 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
             Communication
           </p>
@@ -929,6 +1015,7 @@ export default function AdminSidebar({
           </div>
 
           {/* System */}
+
           <p className="mb-2 mt-8 px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">
             System
           </p>
@@ -947,6 +1034,7 @@ export default function AdminSidebar({
         </nav>
 
         {/* Logged-in admin */}
+
         <div className="border-t border-slate-900/[0.07] p-3">
           <div className="flex items-center gap-3 rounded-2xl border border-white/70 bg-white/55 p-3 shadow-sm backdrop-blur-xl">
             {loadingAdmin ? (
