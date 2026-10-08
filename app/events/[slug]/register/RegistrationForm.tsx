@@ -392,10 +392,10 @@ export default function RegistrationForm({
             </p>
 
             <Link
-              href="/events"
+              href="https://docs.google.com/presentation/d/1kZ4BR9Y73IaWrEsq4OKVMzm8msmdj9om/edit?usp=drive_link&ouid=110317558448549976679&rtpof=true&sd=true"
               className="mt-8 inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-emerald-500 px-7 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/10 transition hover:scale-[1.01] hover:from-blue-700 hover:to-emerald-600"
             >
-              Back to Events
+              Go To Template
             </Link>
           </div>
         </div>
