@@ -640,9 +640,10 @@ export default function SubmissionForm({
             </h1>
 
             {eventDescription && (
-              <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-600 dark:text-white/60 sm:text-[15px]">
+              <p className="mt-4 max-w-4xl whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-white/60 sm:text-[15px]">
                 {eventDescription}
               </p>
+              
             )}
 
             <div className="mt-6 flex flex-wrap gap-2.5">

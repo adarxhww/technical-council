@@ -445,10 +445,9 @@ export default function RegistrationForm({
                 {event.title}
               </h1>
 
-              <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-500 dark:text-slate-400 sm:text-base">
-                {page.description ||
-                  event.description}
-              </p>
+              <p className="mt-4 max-w-3xl whitespace-pre-line text-sm leading-7 text-slate-500 dark:text-slate-400">
+               {page.description || event.description}
+               </p>
 
               <div className="mt-7 flex flex-wrap gap-3">
                 <EventInfo
