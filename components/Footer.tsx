@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { Github, Instagram, Linkedin, Youtube } from "lucide-react";
+import { Github, Instagram, Linkedin} from "lucide-react";
 
 export function Footer() {
   return (
@@ -193,17 +193,6 @@ export function Footer() {
                   className="footer-social-icon grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-slate-50 transition hover:-translate-y-1 dark:border-white/10 dark:bg-[#202020]"
                 >
                   <Github size={17} />
-                </a>
-
-                {/* YouTube */}
-                <a
-                  href="https://www.youtube.com/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="YouTube"
-                  className="footer-social-icon grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-slate-50 transition hover:-translate-y-1 dark:border-white/10 dark:bg-[#202020]"
-                >
-                  <Youtube size={17} />
                 </a>
               </div>
             </div>
