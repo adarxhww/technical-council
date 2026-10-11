@@ -351,7 +351,7 @@ export default function ContactPage() {
                 <b>Call Us</b>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  +91 790 522 1160
+                  +91 829 960 2648
                 </p>
               </div>
             </div>
